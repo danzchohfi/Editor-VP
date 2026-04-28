@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Output
+output/
+
+# Node / Remotion
+remotion/node_modules/
+remotion/.cache/
+remotion/out/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -17,6 +17,7 @@ from src.segment_planner import plan_segments, segments_to_cut_report
 from src.video_cutter import cut_video
 from src.subtitle_generator import remap_timestamps, generate_srt, generate_word_timing_json
 from src.motion_overlay import add_word_highlight_captions
+from src.remotion_renderer import render_with_remotion, is_remotion_available
 
 
 def run(input_path: str, config: dict, output_dir: str = "output") -> dict:
@@ -126,17 +127,27 @@ def run(input_path: str, config: dict, output_dir: str = "output") -> dict:
 
         # --- Step 8: Motion overlay ---
         final_path = os.path.join(output_dir, f"{stem}_editado.mp4")
+        overlay_cfg = {
+            "font_size": sub_cfg.get("font_size", 52),
+            "highlight_color": sub_cfg.get("highlight_color", "#FFD700"),
+            "text_color": sub_cfg.get("text_color", "#FFFFFF"),
+            "margin_bottom": sub_cfg.get("margin_bottom", 80),
+            "words_per_line": sub_cfg.get("words_per_line", 5),
+            "video_codec": out_cfg.get("video_codec", "libx264"),
+            "crf": out_cfg.get("crf", 18),
+        }
+
         if sub_cfg.get("enabled", True) and sub_cfg.get("style") == "word_highlight":
-            print("[8/8] Renderizando legendas animadas...")
-            overlay_cfg = {
-                "font_size": sub_cfg.get("font_size", 52),
-                "highlight_color": sub_cfg.get("highlight_color", "#FFD700"),
-                "text_color": sub_cfg.get("text_color", "#FFFFFF"),
-                "margin_bottom": sub_cfg.get("margin_bottom", 80),
-                "video_codec": out_cfg.get("video_codec", "libx264"),
-                "crf": out_cfg.get("crf", 18),
-            }
-            add_word_highlight_captions(cut_path, word_timing, final_path, overlay_cfg)
+            if is_remotion_available():
+                print("[8/8] Renderizando legendas animadas com Remotion (React)...")
+                try:
+                    render_with_remotion(cut_path, word_timing, final_path, overlay_cfg)
+                except Exception as e:
+                    print(f"      Remotion falhou ({e}), usando fallback ASS...")
+                    add_word_highlight_captions(cut_path, word_timing, final_path, overlay_cfg)
+            else:
+                print("[8/8] Renderizando legendas animadas (ffmpeg ASS)...")
+                add_word_highlight_captions(cut_path, word_timing, final_path, overlay_cfg)
         else:
             print("[8/8] Copiando vídeo final (legendas externas)...")
             import shutil
