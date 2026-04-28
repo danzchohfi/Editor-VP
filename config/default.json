@@ -1,0 +1,31 @@
+{
+  "silence": {
+    "threshold_db": -40,
+    "min_duration_s": 0.8,
+    "margin_s": 0.15
+  },
+  "error_detection": {
+    "enabled": true,
+    "aggressiveness": "moderate",
+    "filler_words": ["uh", "um", "né", "tipo", "assim", "então", "ah", "eh", "ahn"]
+  },
+  "subtitles": {
+    "enabled": true,
+    "style": "word_highlight",
+    "font_size": 52,
+    "position": "bottom",
+    "highlight_color": "#FFD700",
+    "text_color": "#FFFFFF",
+    "background_color": "#000000",
+    "background_opacity": 0.7,
+    "words_per_line": 5,
+    "margin_bottom": 80
+  },
+  "output": {
+    "format": "mp4",
+    "quality": "high",
+    "video_codec": "libx264",
+    "audio_codec": "aac",
+    "crf": 18
+  }
+}
