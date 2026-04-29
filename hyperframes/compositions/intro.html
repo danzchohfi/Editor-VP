@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="../node_modules/gsap/dist/gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+        font-family: var(--font, 'Arial Black', Arial, sans-serif);
+      }
+
+      #intro { position: relative; width: 1920px; height: 1080px; overflow: hidden; }
+
+      #intro .bg {
+        position: absolute; inset: 0;
+        background: linear-gradient(135deg, var(--primary, #1A1A2E) 0%, var(--secondary, #0f0f1a) 100%);
+      }
+      #intro .dot-grid {
+        position: absolute; inset: 0;
+        background-image: radial-gradient(circle, var(--accent-faint, rgba(255,107,53,0.12)) 1.5px, transparent 1.5px);
+        background-size: 64px 64px;
+        opacity: 0;
+      }
+      #intro .glow {
+        position: absolute;
+        width: 720px; height: 720px; border-radius: 50%;
+        background: radial-gradient(circle, var(--accent-glow, rgba(255,107,53,0.22)) 0%, transparent 70%);
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%) scale(0);
+        opacity: 0;
+      }
+      #intro .center {
+        position: absolute; inset: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 28px;
+      }
+      #intro .company {
+        color: var(--text, #fff);
+        font-size: 88px; font-weight: 900;
+        letter-spacing: -0.02em;
+        text-shadow: 0 4px 32px rgba(0,0,0,0.4);
+        opacity: 0; transform: translateY(40px);
+      }
+      #intro .divider {
+        width: 0; height: 4px;
+        background: var(--accent, #FF6B35);
+        border-radius: 3px;
+      }
+      #intro .tagline {
+        color: var(--text, #fff);
+        font-size: 30px; font-weight: 400;
+        letter-spacing: 0.18em; text-transform: uppercase;
+        opacity: 0; transform: translateY(14px);
+      }
+      #intro .corner {
+        position: absolute;
+        width: 60px; height: 60px;
+        opacity: 0;
+      }
+      #intro .corner-tl { top: 40px; left: 40px; border-top: 4px solid var(--accent, #FF6B35); border-left: 4px solid var(--accent, #FF6B35); border-radius: 4px 0 0 0; }
+      #intro .corner-tr { top: 40px; right: 40px; border-top: 4px solid var(--accent, #FF6B35); border-right: 4px solid var(--accent, #FF6B35); border-radius: 0 4px 0 0; }
+      #intro .corner-bl { bottom: 40px; left: 40px; border-bottom: 4px solid var(--accent, #FF6B35); border-left: 4px solid var(--accent, #FF6B35); border-radius: 0 0 0 4px; }
+      #intro .corner-br { bottom: 40px; right: 40px; border-bottom: 4px solid var(--accent, #FF6B35); border-right: 4px solid var(--accent, #FF6B35); border-radius: 0 0 4px 0; }
+    </style>
+  </head>
+  <body>
+    <div id="intro"
+         data-composition-id="intro"
+         data-start="0"
+         data-duration="3.5"
+         data-width="1920"
+         data-height="1080">
+
+      <div class="bg"></div>
+      <div class="dot-grid" id="intro-dots"></div>
+      <div class="glow" id="intro-glow"></div>
+
+      <div class="center">
+        <div class="company" id="intro-company">EMPRESA</div>
+        <div class="divider" id="intro-divider"></div>
+        <div class="tagline" id="intro-tagline">Conteúdo que transforma</div>
+      </div>
+
+      <div class="corner corner-tl" id="ctl"></div>
+      <div class="corner corner-tr" id="ctr"></div>
+      <div class="corner corner-bl" id="cbl"></div>
+      <div class="corner corner-br" id="cbr"></div>
+    </div>
+
+    <script>
+      const B = window.__BRAND__ || {};
+      const set = (k, v) => v && document.documentElement.style.setProperty(k, v);
+
+      set('--primary',  B.primary_color);
+      set('--secondary', B.secondary_color);
+      set('--accent',   B.accent_color);
+      set('--text',     B.text_color);
+      set('--font',     B.font_family);
+
+      if (B.accent_color) {
+        const h = B.accent_color.replace('#','');
+        const r = parseInt(h.slice(0,2),16), g = parseInt(h.slice(2,4),16), b = parseInt(h.slice(4,6),16);
+        set('--accent-faint', `rgba(${r},${g},${b},0.12)`);
+        set('--accent-glow',  `rgba(${r},${g},${b},0.22)`);
+      }
+
+      if (B.company) document.getElementById('intro-company').textContent = B.company;
+      if (B.tagline) document.getElementById('intro-tagline').textContent = B.tagline;
+
+      window.__timelines = window.__timelines || {};
+
+      const introTl = gsap.timeline({ paused: true });
+      introTl
+        .to('#intro-dots',    { opacity: 1, duration: 0.5 }, 0)
+        .to('#intro-glow',    { opacity: 1, scale: 1, duration: 0.7, ease: 'power2.out' }, 0.1)
+        .to(['#ctl', '#cbr'], { opacity: 1, duration: 0.35 }, 0.2)
+        .to(['#ctr', '#cbl'], { opacity: 1, duration: 0.35 }, 0.35)
+        .to('#intro-company', { opacity: 1, y: 0, duration: 0.6, ease: 'back.out(1.4)' }, 0.35)
+        .to('#intro-divider', { width: 200, duration: 0.45, ease: 'power2.inOut' }, 0.7)
+        .to('#intro-tagline', { opacity: 0.9, y: 0, duration: 0.5 }, 0.9)
+        .to('#intro-glow',    { scale: 1.1, duration: 0.7, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 1.5)
+        .to('#intro',         { opacity: 0, duration: 0.35, ease: 'power2.in' }, 3.15);
+
+      window.__timelines['intro'] = introTl;
+    </script>
+  </body>
+</html>

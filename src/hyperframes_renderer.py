@@ -14,6 +14,7 @@ import tempfile
 from pathlib import Path
 
 _HYPERFRAMES_DIR = Path(__file__).parent.parent / "hyperframes"
+_COMPOSITIONS_DIR = _HYPERFRAMES_DIR / "compositions"
 
 
 def is_hyperframes_available() -> bool:
@@ -24,7 +25,7 @@ def render_bumper(
     scene: str,
     brand: dict,
     output_path: str,
-    duration_s: float = 3.5,
+    duration_s: float | None = None,
 ) -> str:
     """
     Render an intro or outro bumper scene using Hyperframes.
@@ -37,32 +38,48 @@ def render_bumper(
     if not is_hyperframes_available():
         raise RuntimeError("Node.js not found — cannot use Hyperframes renderer.")
 
-    scene_file = _HYPERFRAMES_DIR / "scenes" / f"{scene}.html"
+    scene_file = _COMPOSITIONS_DIR / f"{scene}.html"
     if not scene_file.exists():
-        raise RuntimeError(f"Hyperframes scene not found: {scene_file}")
+        raise RuntimeError(f"Hyperframes composition not found: {scene_file}")
 
-    # Inject brand data into a temp copy of the HTML
     with open(scene_file, "r", encoding="utf-8") as f:
         html = f.read()
 
     brand_script = f"\n<script>window.__BRAND__ = {json.dumps(brand, ensure_ascii=False)};</script>\n"
     html = html.replace("</head>", brand_script + "</head>", 1)
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".html", dir=_HYPERFRAMES_DIR / "scenes",
-        delete=False, encoding="utf-8"
-    ) as tmp:
-        tmp.write(html)
-        tmp_path = tmp.name
+    # Fix relative path to node_modules when running from temp dir
+    html = html.replace(
+        "src=\"../node_modules/gsap/dist/gsap.min.js\"",
+        f"src=\"{_HYPERFRAMES_DIR / 'node_modules' / 'gsap' / 'dist' / 'gsap.min.js'}\"",
+    )
 
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
-    try:
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+
+        (tmp_path / "index.html").write_text(html, encoding="utf-8")
+
+        # Minimal hyperframes.json so the CLI recognises it as a project
+        hf_config = {
+            "$schema": "https://hyperframes.heygen.com/schema/hyperframes.json",
+            "registry": "https://raw.githubusercontent.com/heygen-com/hyperframes/main/registry",
+        }
+        (tmp_path / "hyperframes.json").write_text(
+            json.dumps(hf_config, indent=2), encoding="utf-8"
+        )
+
+        # Symlink node_modules so the local gsap script tag resolves
+        node_modules_src = _HYPERFRAMES_DIR / "node_modules"
+        if node_modules_src.exists():
+            (tmp_path / "node_modules").symlink_to(node_modules_src.resolve())
+
         cmd = [
             "npx", "--yes", "hyperframes", "render",
-            tmp_path,
-            "--output", os.path.abspath(output_path),
-            "--non-interactive",
+            str(tmp_path),
+            "-o", os.path.abspath(output_path),
+            "--quiet",
         ]
         print(f"[hyperframes] Rendering {scene} bumper...")
         result = subprocess.run(
@@ -76,10 +93,9 @@ def render_bumper(
             raise RuntimeError(
                 f"Hyperframes render failed:\n{result.stdout}\n{result.stderr}"
             )
-        print(f"[hyperframes] {scene} bumper → {output_path}")
-        return output_path
-    finally:
-        Path(tmp_path).unlink(missing_ok=True)
+
+    print(f"[hyperframes] {scene} bumper → {output_path}")
+    return output_path
 
 
 def composite_with_bumpers(

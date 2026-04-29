@@ -16,6 +16,8 @@ output/
 remotion/node_modules/
 remotion/.cache/
 remotion/out/
+hyperframes/node_modules/
+hyperframes/renders/
 
 # OS
 .DS_Store
