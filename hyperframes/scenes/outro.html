@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: var(--font-family, 'Arial'), sans-serif;
+    }
+
+    .bg {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(160deg, var(--secondary-color, #0f0f1a) 0%, var(--primary-color, #1A1A2E) 100%);
+    }
+
+    .dot-grid {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, var(--accent-faint, rgba(255,215,0,0.1)) 1.5px, transparent 1.5px);
+      background-size: 52px 52px;
+      opacity: 0;
+    }
+
+    /* Left column — logo + divider + social */
+    .left-col {
+      position: absolute;
+      left: 160px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 32px;
+      opacity: 0;
+    }
+
+    .logo-text {
+      color: var(--text-color, #fff);
+      font-size: 72px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+
+    .logo-img {
+      width: 160px;
+      height: 160px;
+      object-fit: contain;
+      filter: drop-shadow(0 2px 16px rgba(0,0,0,0.5));
+    }
+
+    .accent-bar {
+      width: 6px;
+      height: 0px;
+      background: var(--accent-color, #FFD700);
+      border-radius: 3px;
+    }
+
+    .social-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .social-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .social-label {
+      color: var(--accent-color, #FFD700);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      opacity: 0.9;
+    }
+
+    .social-handle {
+      color: var(--text-color, #fff);
+      font-size: 26px;
+      font-weight: 500;
+    }
+
+    /* Right column — CTA button */
+    .right-col {
+      position: absolute;
+      right: 160px;
+      top: 50%;
+      transform: translateY(-50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      opacity: 0;
+    }
+
+    .cta-label {
+      color: var(--text-color, #fff);
+      font-size: 28px;
+      font-weight: 400;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      opacity: 0.7;
+    }
+
+    .cta-btn {
+      background: var(--accent-color, #FFD700);
+      color: #000;
+      font-size: 30px;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      padding: 20px 52px;
+      border-radius: 60px;
+      text-align: center;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    }
+
+    .subscribe-icon {
+      font-size: 48px;
+    }
+
+    /* Vertical divider */
+    .v-divider {
+      position: absolute;
+      left: 50%;
+      top: 20%;
+      bottom: 20%;
+      width: 2px;
+      background: var(--accent-color, #FFD700);
+      opacity: 0;
+      transform: scaleY(0);
+      transform-origin: center;
+    }
+  </style>
+</head>
+<body
+  data-duration="6"
+  data-fps="30"
+  data-width="1920"
+  data-height="1080"
+>
+  <div class="bg"></div>
+  <div class="dot-grid" id="dotGrid"></div>
+
+  <!-- Left: brand info -->
+  <div class="left-col" id="leftCol">
+    <span class="logo-text" id="companyName">EMPRESA</span>
+    <div class="accent-bar" id="accentBar"></div>
+    <div class="social-list" id="socialList">
+      <!-- Injected by Python -->
+    </div>
+  </div>
+
+  <!-- Divider -->
+  <div class="v-divider" id="vDivider"></div>
+
+  <!-- Right: CTA -->
+  <div class="right-col" id="rightCol">
+    <span class="cta-label">Gostou do conteúdo?</span>
+    <div class="cta-btn">
+      <div class="subscribe-icon">🔔</div>
+      Inscreva-se
+    </div>
+    <span class="cta-label" id="tagline" style="font-size:22px; margin-top: -8px;"></span>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    const brand = window.__BRAND__ || {};
+
+    // Apply brand CSS vars
+    const vars = {
+      '--primary-color': brand.primary_color,
+      '--secondary-color': brand.secondary_color,
+      '--accent-color': brand.accent_color,
+      '--text-color': brand.text_color,
+      '--font-family': brand.font_family,
+    };
+    for (const [k, v] of Object.entries(vars)) {
+      if (v) document.documentElement.style.setProperty(k, v);
+    }
+    if (brand.accent_color) {
+      const hex = brand.accent_color.replace('#','');
+      const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+      document.documentElement.style.setProperty('--accent-faint', `rgba(${r},${g},${b},0.1)`);
+    }
+
+    // Populate content
+    if (brand.company) document.getElementById('companyName').textContent = brand.company;
+    if (brand.tagline) document.getElementById('tagline').textContent = brand.tagline;
+
+    // Build social links
+    if (brand.social) {
+      const list = document.getElementById('socialList');
+      for (const [platform, handle] of Object.entries(brand.social)) {
+        const item = document.createElement('div');
+        item.className = 'social-item';
+        item.innerHTML = `<span class="social-label">${platform}</span><span class="social-handle">${handle}</span>`;
+        list.appendChild(item);
+      }
+    }
+
+    // GSAP timeline
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+    tl
+      .to('#dotGrid', { opacity: 1, duration: 0.6 }, 0)
+
+      // Left column slides in from left
+      .to('#leftCol', { opacity: 1, x: 0, duration: 0.7, ease: 'back.out(1.2)' }, 0.2)
+
+      // Accent bar grows down
+      .to('#accentBar', { height: 120, duration: 0.5, ease: 'power2.inOut' }, 0.55)
+
+      // Vertical divider draws in from center
+      .to('#vDivider', { opacity: 0.4, scaleY: 1, duration: 0.6, ease: 'power2.inOut' }, 0.6)
+
+      // Right column slides in from right
+      .to('#rightCol', { opacity: 1, duration: 0.7, ease: 'back.out(1.2)' }, 0.75)
+
+      // CTA button pulse
+      .to('.cta-btn', { scale: 1.04, duration: 0.4, yoyo: true, repeat: 3, ease: 'sine.inOut' }, 2.5)
+
+      // Fade out
+      .to('body', { opacity: 0, duration: 0.5, ease: 'power2.in' }, 5.5);
+  </script>
+</body>
+</html>

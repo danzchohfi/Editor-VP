@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Intro Bumper</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      background: var(--secondary-color, #1A1A2E);
+      font-family: var(--font-family, 'Arial'), sans-serif;
+    }
+
+    /* Background gradient */
+    .bg-gradient {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, var(--primary-color, #1A1A2E) 0%, var(--secondary-color, #0f0f1a) 100%);
+    }
+
+    /* Animated dot grid */
+    .dot-grid {
+      position: absolute;
+      inset: 0;
+      background-image: radial-gradient(circle, var(--accent-color-faint, rgba(255,215,0,0.12)) 1.5px, transparent 1.5px);
+      background-size: 64px 64px;
+      opacity: 0;
+    }
+
+    /* Accent shape — big circle blur */
+    .glow-circle {
+      position: absolute;
+      width: 700px;
+      height: 700px;
+      border-radius: 50%;
+      background: radial-gradient(circle, var(--accent-color-glow, rgba(255,107,53,0.25)) 0%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      opacity: 0;
+    }
+
+    /* Center content */
+    .center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+    }
+
+    .logo-wrap {
+      opacity: 0;
+      transform: translateY(40px) scale(0.85);
+    }
+
+    .logo-text {
+      color: var(--text-color, #FFFFFF);
+      font-size: 88px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      text-shadow: 0 4px 32px rgba(0,0,0,0.4);
+    }
+
+    .logo-img {
+      width: 200px;
+      height: 200px;
+      object-fit: contain;
+      filter: drop-shadow(0 4px 24px rgba(0,0,0,0.5));
+    }
+
+    .divider {
+      width: 0px;
+      height: 4px;
+      background: var(--accent-color, #FFD700);
+      border-radius: 3px;
+    }
+
+    .tagline {
+      color: var(--text-color, #FFFFFF);
+      font-size: 30px;
+      font-weight: 400;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      opacity: 0;
+      transform: translateY(14px);
+    }
+
+    /* Animated corner accents */
+    .corner {
+      position: absolute;
+      width: 60px;
+      height: 60px;
+      opacity: 0;
+    }
+    .corner-tl { top: 40px; left: 40px; border-top: 4px solid var(--accent-color, #FFD700); border-left: 4px solid var(--accent-color, #FFD700); border-radius: 4px 0 0 0; }
+    .corner-tr { top: 40px; right: 40px; border-top: 4px solid var(--accent-color, #FFD700); border-right: 4px solid var(--accent-color, #FFD700); border-radius: 0 4px 0 0; }
+    .corner-bl { bottom: 40px; left: 40px; border-bottom: 4px solid var(--accent-color, #FFD700); border-left: 4px solid var(--accent-color, #FFD700); border-radius: 0 0 0 4px; }
+    .corner-br { bottom: 40px; right: 40px; border-bottom: 4px solid var(--accent-color, #FFD700); border-right: 4px solid var(--accent-color, #FFD700); border-radius: 0 0 4px 0; }
+  </style>
+</head>
+<body
+  data-duration="3.5"
+  data-fps="30"
+  data-width="1920"
+  data-height="1080"
+>
+  <div class="bg-gradient"></div>
+  <div class="dot-grid" id="dotGrid"></div>
+  <div class="glow-circle" id="glowCircle"></div>
+
+  <div class="center">
+    <div class="logo-wrap" id="logoWrap">
+      <!-- Logo or company name injected by Python -->
+      <span class="logo-text" id="companyName">EMPRESA</span>
+    </div>
+    <div class="divider" id="divider"></div>
+    <p class="tagline" id="tagline">Conteúdo que transforma</p>
+  </div>
+
+  <div class="corner corner-tl" id="cornerTL"></div>
+  <div class="corner corner-tr" id="cornerTR"></div>
+  <div class="corner corner-bl" id="cornerBL"></div>
+  <div class="corner corner-br" id="cornerBR"></div>
+
+  <!-- GSAP from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script>
+    // Brand vars injected by Python via data attributes or inline script
+    const brand = window.__BRAND__ || {};
+    if (brand.primary_color) document.documentElement.style.setProperty('--primary-color', brand.primary_color);
+    if (brand.secondary_color) document.documentElement.style.setProperty('--secondary-color', brand.secondary_color);
+    if (brand.accent_color) {
+      document.documentElement.style.setProperty('--accent-color', brand.accent_color);
+      const hex = brand.accent_color.replace('#','');
+      const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+      document.documentElement.style.setProperty('--accent-color-faint', `rgba(${r},${g},${b},0.12)`);
+      document.documentElement.style.setProperty('--accent-color-glow', `rgba(${r},${g},${b},0.25)`);
+    }
+    if (brand.text_color) document.documentElement.style.setProperty('--text-color', brand.text_color);
+    if (brand.font_family) document.documentElement.style.setProperty('--font-family', brand.font_family);
+    if (brand.company) document.getElementById('companyName').textContent = brand.company;
+    if (brand.tagline) document.getElementById('tagline').textContent = brand.tagline;
+
+    // Master timeline
+    const tl = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+    tl
+      // Background dot grid fades in
+      .to('#dotGrid', { opacity: 1, duration: 0.5 }, 0)
+
+      // Glow circle expands
+      .to('#glowCircle', { opacity: 1, scale: 1, duration: 0.8, ease: 'power2.out' }, 0.1)
+
+      // Corner accents appear
+      .to(['.corner-tl', '.corner-br'], { opacity: 1, duration: 0.4 }, 0.2)
+      .to(['.corner-tr', '.corner-bl'], { opacity: 1, duration: 0.4 }, 0.35)
+
+      // Logo/company name rises in
+      .to('#logoWrap', { opacity: 1, y: 0, scale: 1, duration: 0.65, ease: 'back.out(1.4)' }, 0.35)
+
+      // Divider line expands
+      .to('#divider', { width: 200, duration: 0.5, ease: 'power2.inOut' }, 0.7)
+
+      // Tagline fades up
+      .to('#tagline', { opacity: 0.9, y: 0, duration: 0.55 }, 0.9)
+
+      // Subtle glow pulse
+      .to('#glowCircle', { scale: 1.1, duration: 0.8, yoyo: true, repeat: 1, ease: 'sine.inOut' }, 1.5)
+
+      // Hold then fade out everything
+      .to('body', { opacity: 0, duration: 0.4, ease: 'power2.in' }, 3.1);
+  </script>
+</body>
+</html>

@@ -46,11 +46,15 @@ def render_with_remotion(
     word_timing: list[dict],
     output_path: str,
     config: dict | None = None,
+    brand: dict | None = None,
+    graphic_cues: list[dict] | None = None,
 ) -> str:
     """
-    Render animated captions using Remotion.
+    Render animated captions + motion graphics overlays using Remotion.
 
-    word_timing: list of caption segments from subtitle_generator
+    word_timing: caption segments from subtitle_generator
+    brand: brand config dict
+    graphic_cues: list of graphic cue dicts from brand_analyzer
     Returns output_path on success, raises RuntimeError on failure.
     """
     if not is_remotion_available():
@@ -71,9 +75,17 @@ def render_with_remotion(
 
     video_abs = str(Path(video_path).resolve())
 
+    # Filter out bumper cues — those are handled by Hyperframes, not Remotion
+    overlay_cues = [
+        c for c in (graphic_cues or [])
+        if c.get("type") not in ("intro_bumper", "outro_bumper")
+    ]
+
     props = {
         "videoSrc": video_abs,
         "wordTiming": word_timing,
+        "graphicCues": overlay_cues,
+        "brand": brand or {},
         "durationInFrames": duration_frames,
         "fps": fps,
         "width": width,

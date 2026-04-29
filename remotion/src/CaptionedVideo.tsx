@@ -2,6 +2,9 @@ import React, { useMemo } from "react";
 import { AbsoluteFill, OffthreadVideo, useCurrentFrame, useVideoConfig } from "remotion";
 import { z } from "zod";
 import { WordHighlightCaption } from "./WordHighlightCaption";
+import { MotionGraphicsLayer } from "./graphics/MotionGraphicsLayer";
+import type { BrandConfig, GraphicCue } from "./brand/types";
+import { defaultBrand } from "./brand/types";
 
 export const WordTimingSchema = z.array(
   z.object({
@@ -18,9 +21,18 @@ export const WordTimingSchema = z.array(
   })
 );
 
+const GraphicCueSchema = z.object({
+  type: z.enum(["intro_bumper", "outro_bumper", "lower_third", "keyword_bubble", "quote_card", "topic_title"]),
+  start_s: z.number(),
+  duration_s: z.number(),
+  content: z.record(z.string()),
+});
+
 export const CaptionedVideoSchema = z.object({
   videoSrc: z.string(),
   wordTiming: WordTimingSchema,
+  graphicCues: z.array(GraphicCueSchema).default([]),
+  brand: z.record(z.any()).default({}),
   durationInFrames: z.number(),
   fps: z.number(),
   width: z.number(),
@@ -37,6 +49,8 @@ type Props = z.infer<typeof CaptionedVideoSchema>;
 export const CaptionedVideo: React.FC<Props> = ({
   videoSrc,
   wordTiming,
+  graphicCues,
+  brand: brandRaw,
   highlightColor,
   textColor,
   fontSize,
@@ -45,6 +59,9 @@ export const CaptionedVideo: React.FC<Props> = ({
   const { fps } = useVideoConfig();
   const frame = useCurrentFrame();
   const currentTimeMs = (frame / fps) * 1000;
+
+  const brand: BrandConfig = { ...defaultBrand, ...brandRaw };
+  const cues = graphicCues as GraphicCue[];
 
   const activeSegment = useMemo(() => {
     return wordTiming.find(
@@ -55,6 +72,7 @@ export const CaptionedVideo: React.FC<Props> = ({
 
   return (
     <AbsoluteFill>
+      {/* Base video */}
       {videoSrc && (
         <OffthreadVideo
           src={videoSrc}
@@ -62,6 +80,12 @@ export const CaptionedVideo: React.FC<Props> = ({
         />
       )}
 
+      {/* Motion graphics overlays (lower thirds, keywords, quotes, logo) */}
+      {cues.length > 0 && (
+        <MotionGraphicsLayer brand={brand} cues={cues} />
+      )}
+
+      {/* Word-by-word caption overlay */}
       {activeSegment && (
         <AbsoluteFill
           style={{

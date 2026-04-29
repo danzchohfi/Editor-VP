@@ -1,0 +1,18 @@
+{
+  "company": "Nome da Empresa",
+  "primary_color": "#1A1A2E",
+  "secondary_color": "#16213E",
+  "accent_color": "#E94560",
+  "text_color": "#FFFFFF",
+  "font_family": "Arial",
+  "logo_path": "./assets/brands/template/logo.png",
+  "tagline": "Seu slogan aqui",
+  "social": {
+    "Instagram": "@empresa",
+    "YouTube": "youtube.com/@empresa"
+  },
+  "host": {
+    "name": "Nome do Apresentador",
+    "title": "Cargo | Empresa"
+  }
+}

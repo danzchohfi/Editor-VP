@@ -16,6 +16,8 @@ export const RemotionRoot: React.FC = () => {
         defaultProps={{
           videoSrc: "",
           wordTiming: [],
+          graphicCues: [],
+          brand: {},
           durationInFrames: 300,
           fps: 30,
           width: 1920,

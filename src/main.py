@@ -27,10 +27,11 @@ def cli():
 @click.option("--input", "-i", "input_path", required=True, type=click.Path(exists=True), help="Arquivo de vídeo de entrada")
 @click.option("--config", "-c", "config_path", default=None, type=click.Path(), help="Arquivo de configuração JSON (padrão: config/default.json)")
 @click.option("--output", "-o", "output_dir", default="output", show_default=True, help="Diretório de saída")
+@click.option("--brand", "-b", "brand_path", default=None, type=click.Path(), help="Arquivo brand.json com identidade visual da empresa")
 @click.option("--no-subtitles", is_flag=True, default=False, help="Pular geração de legendas animadas")
 @click.option("--no-error-detection", is_flag=True, default=False, help="Pular detecção de erros com Claude")
 @click.option("--aggressiveness", type=click.Choice(["conservative", "moderate", "aggressive"]), default=None, help="Nível de agressividade dos cortes")
-def edit(input_path, config_path, output_dir, no_subtitles, no_error_detection, aggressiveness):
+def edit(input_path, config_path, output_dir, brand_path, no_subtitles, no_error_detection, aggressiveness):
     """Editar vídeo: cortar silêncios, detectar erros, adicionar legendas animadas."""
     _check_input(input_path)
     config = _load_config(config_path)
@@ -44,7 +45,7 @@ def edit(input_path, config_path, output_dir, no_subtitles, no_error_detection, 
 
     from src.pipeline import run
     try:
-        result = run(input_path, config, output_dir)
+        result = run(input_path, config, output_dir, brand_path=brand_path)
         click.echo(click.style("\nEdição concluída com sucesso!", fg="green", bold=True))
         _print_results(result)
     except Exception as e:

@@ -1,0 +1,12 @@
+{
+  "name": "editor-vp-hyperframes",
+  "version": "1.0.0",
+  "description": "Hyperframes bumper scenes for Editor-VP",
+  "scripts": {
+    "render:intro": "npx hyperframes render scenes/intro.html --output ../output/intro.mp4",
+    "render:outro": "npx hyperframes render scenes/outro.html --output ../output/outro.mp4"
+  },
+  "dependencies": {
+    "hyperframes": "latest"
+  }
+}

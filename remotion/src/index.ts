@@ -1,3 +1,11 @@
 export { RemotionRoot } from "./Root";
 export { CaptionedVideo } from "./CaptionedVideo";
 export { WordHighlightCaption } from "./WordHighlightCaption";
+export { MotionGraphicsLayer } from "./graphics/MotionGraphicsLayer";
+export { LowerThird } from "./graphics/LowerThird";
+export { KeywordBubble } from "./graphics/KeywordBubble";
+export { QuoteCard } from "./graphics/QuoteCard";
+export { TopicTitle } from "./graphics/TopicTitle";
+export { LogoBug } from "./graphics/LogoBug";
+export { IntroBumper } from "./graphics/IntroBumper";
+export { OutroBumper } from "./graphics/OutroBumper";
