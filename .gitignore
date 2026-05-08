@@ -18,6 +18,9 @@ remotion/.cache/
 remotion/out/
 hyperframes/node_modules/
 hyperframes/renders/
+remotion-audiogram/node_modules/
+remotion-audiogram/.cache/
+remotion-audiogram/out/
 
 # OS
 .DS_Store
