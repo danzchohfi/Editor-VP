@@ -36,7 +36,8 @@
     "dev": "remotion studio",
     "build": "remotion bundle",
     "upgrade": "remotion upgrade",
-    "lint": "eslint src && tsc"
+    "lint": "eslint src && tsc",
+    "setup": "npx tsx setup.ts"
   },
   "sideEffects": [
     "*.css"
