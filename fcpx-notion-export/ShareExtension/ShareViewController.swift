@@ -2,32 +2,41 @@ import Cocoa
 import UniformTypeIdentifiers
 
 /// View controller exibido pelo Final Cut Pro ao compartilhar um vídeo.
-/// Fluxo: (token uma vez) -> banco -> registro/cliente -> propriedade -> enviar.
+/// Fluxo: (credenciais uma vez) -> banco -> registro/cliente -> propriedades ->
+/// sobe no Cloudflare Stream, grava o link e anexa o arquivo no card do Notion.
 final class ShareViewController: NSViewController {
 
     // Estado
     private var videoURL: URL?
-    private var client: NotionClient?
+    private var notion: NotionClient?
     private var databases: [NotionDatabase] = []
     private var pages: [NotionPage] = []
+    private var urlProperties: [NotionProperty] = []
     private var fileProperties: [NotionProperty] = []
     private var titleProperty: String = ""
 
-    // UI
-    private let tokenField = NSSecureTextField()
-    private let saveTokenButton = NSButton()
+    // Credenciais
+    private let notionTokenField = NSSecureTextField()
+    private let cfAccountField = NSTextField()
+    private let cfTokenField = NSSecureTextField()
+    private let saveCredsButton = NSButton()
+    private let settingsBox = NSStackView()
+
+    // Seleção
     private let databasePopup = NSPopUpButton()
     private let searchField = NSSearchField()
     private let pagePopup = NSPopUpButton()
-    private let propertyPopup = NSPopUpButton()
+    private let urlPropertyPopup = NSPopUpButton()
+    private let filePropertyPopup = NSPopUpButton()
+
+    // Feedback
     private let statusLabel = NSTextField(labelWithString: "")
     private let progress = NSProgressIndicator()
     private let sendButton = NSButton()
     private let cancelButton = NSButton()
-    private let tokenRow = NSStackView()
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 460, height: 430))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 540))
         buildUI()
     }
 
@@ -43,7 +52,7 @@ final class ShareViewController: NSViewController {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 10
+        stack.spacing = 9
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
         NSLayoutConstraint.activate([
@@ -53,22 +62,28 @@ final class ShareViewController: NSViewController {
             stack.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -20)
         ])
 
-        let titleLabel = NSTextField(labelWithString: "Exportar para o Notion")
+        let titleLabel = NSTextField(labelWithString: "Exportar para aprovação (Cloudflare + Notion)")
         titleLabel.font = .boldSystemFont(ofSize: 15)
         stack.addArrangedSubview(titleLabel)
 
-        // Token (mostrado só quando não há token salvo)
-        tokenField.placeholderString = "Token interno do Notion (secret_...)"
-        saveTokenButton.title = "Salvar"
-        saveTokenButton.bezelStyle = .rounded
-        saveTokenButton.target = self
-        saveTokenButton.action = #selector(saveToken)
-        tokenRow.orientation = .horizontal
-        tokenRow.spacing = 8
-        tokenRow.addArrangedSubview(tokenField)
-        tokenRow.addArrangedSubview(saveTokenButton)
-        tokenField.widthAnchor.constraint(equalToConstant: 300).isActive = true
-        stack.addArrangedSubview(labeled("Conta", tokenRow))
+        // Credenciais (escondidas quando já configuradas)
+        settingsBox.orientation = .vertical
+        settingsBox.alignment = .leading
+        settingsBox.spacing = 6
+        notionTokenField.placeholderString = "Token interno do Notion (ntn_… / secret_…)"
+        cfAccountField.placeholderString = "Cloudflare Account ID"
+        cfTokenField.placeholderString = "Cloudflare API Token (Stream:Edit)"
+        saveCredsButton.title = "Salvar credenciais"
+        saveCredsButton.bezelStyle = .rounded
+        saveCredsButton.target = self
+        saveCredsButton.action = #selector(saveCreds)
+        [notionTokenField, cfAccountField, cfTokenField].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            $0.widthAnchor.constraint(equalToConstant: 420).isActive = true
+            settingsBox.addArrangedSubview($0)
+        }
+        settingsBox.addArrangedSubview(saveCredsButton)
+        stack.addArrangedSubview(settingsBox)
 
         databasePopup.target = self
         databasePopup.action = #selector(databaseChanged)
@@ -81,7 +96,8 @@ final class ShareViewController: NSViewController {
         stack.addArrangedSubview(labeled("Filtrar", fill(searchField)))
 
         stack.addArrangedSubview(labeled("Registro (card)", fill(pagePopup)))
-        stack.addArrangedSubview(labeled("Propriedade de arquivo", fill(propertyPopup)))
+        stack.addArrangedSubview(labeled("Propriedade do link", fill(urlPropertyPopup)))
+        stack.addArrangedSubview(labeled("Propriedade do arquivo", fill(filePropertyPopup)))
 
         progress.style = .bar
         progress.isIndeterminate = false
@@ -89,13 +105,13 @@ final class ShareViewController: NSViewController {
         progress.maxValue = 1
         progress.isHidden = true
         progress.translatesAutoresizingMaskIntoConstraints = false
-        progress.widthAnchor.constraint(equalToConstant: 420).isActive = true
+        progress.widthAnchor.constraint(equalToConstant: 440).isActive = true
         stack.addArrangedSubview(progress)
 
         statusLabel.textColor = .secondaryLabelColor
         statusLabel.lineBreakMode = .byWordWrapping
         statusLabel.maximumNumberOfLines = 3
-        statusLabel.preferredMaxLayoutWidth = 420
+        statusLabel.preferredMaxLayoutWidth = 440
         stack.addArrangedSubview(statusLabel)
 
         let buttons = NSStackView()
@@ -105,7 +121,7 @@ final class ShareViewController: NSViewController {
         cancelButton.bezelStyle = .rounded
         cancelButton.target = self
         cancelButton.action = #selector(cancel)
-        sendButton.title = "Enviar para o Notion"
+        sendButton.title = "Enviar"
         sendButton.bezelStyle = .rounded
         sendButton.keyEquivalent = "\r"
         sendButton.target = self
@@ -115,7 +131,6 @@ final class ShareViewController: NSViewController {
         stack.addArrangedSubview(buttons)
     }
 
-    /// Linha com rótulo à esquerda e controle preenchendo o restante.
     private func labeled(_ title: String, _ control: NSView) -> NSView {
         let row = NSStackView()
         row.orientation = .horizontal
@@ -123,7 +138,7 @@ final class ShareViewController: NSViewController {
         row.spacing = 8
         let label = NSTextField(labelWithString: title)
         label.alignment = .right
-        label.widthAnchor.constraint(equalToConstant: 110).isActive = true
+        label.widthAnchor.constraint(equalToConstant: 130).isActive = true
         row.addArrangedSubview(label)
         row.addArrangedSubview(control)
         row.translatesAutoresizingMaskIntoConstraints = false
@@ -150,10 +165,7 @@ final class ShareViewController: NSViewController {
                     if let u = data as? URL { url = u }
                     else if let d = data as? Data { url = URL(dataRepresentation: d, relativeTo: nil) }
                     if let url = url {
-                        DispatchQueue.main.async {
-                            self?.videoURL = url
-                            self?.refreshStatus()
-                        }
+                        DispatchQueue.main.async { self?.videoURL = url; self?.refreshStatus() }
                     }
                 }
                 return
@@ -162,36 +174,45 @@ final class ShareViewController: NSViewController {
     }
 
     private func bootstrap() {
-        if let token = KeychainTokenStore.load(), !token.isEmpty {
-            tokenField.stringValue = token
-            tokenRow.isHidden = true
-            client = NotionClient(token: token)
+        notionTokenField.stringValue = Credentials.notionToken ?? ""
+        cfAccountField.stringValue = Credentials.cloudflareAccountId ?? ""
+        cfTokenField.stringValue = Credentials.cloudflareToken ?? ""
+
+        if Credentials.isComplete {
+            settingsBox.isHidden = true
+            notion = NotionClient(token: Credentials.notionToken!)
             Task { await reloadDatabases() }
         } else {
-            setControlsEnabled(false)
-            statusLabel.stringValue = "Cole seu token interno do Notion e clique em Salvar."
+            setSelectionEnabled(false)
+            statusLabel.stringValue = "Preencha as credenciais do Notion e do Cloudflare e salve."
         }
     }
 
-    private func setControlsEnabled(_ enabled: Bool) {
-        [databasePopup, searchField, pagePopup, propertyPopup, sendButton].forEach { $0.isEnabled = enabled }
+    private func setSelectionEnabled(_ enabled: Bool) {
+        [databasePopup, searchField, pagePopup, urlPropertyPopup, filePropertyPopup, sendButton]
+            .forEach { $0.isEnabled = enabled }
     }
 
     // MARK: - Actions
 
-    @objc private func saveToken() {
-        let token = tokenField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !token.isEmpty else { return }
-        KeychainTokenStore.save(token)
-        client = NotionClient(token: token)
-        tokenRow.isHidden = true
+    @objc private func saveCreds() {
+        let notionToken = notionTokenField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cfAccount = cfAccountField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cfToken = cfTokenField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !notionToken.isEmpty, !cfAccount.isEmpty, !cfToken.isEmpty else {
+            statusLabel.stringValue = "Preencha as três credenciais."
+            return
+        }
+        Credentials.notionToken = notionToken
+        Credentials.cloudflareAccountId = cfAccount
+        Credentials.cloudflareToken = cfToken
+        notion = NotionClient(token: notionToken)
+        settingsBox.isHidden = true
         Task { await reloadDatabases() }
     }
 
     @objc private func databaseChanged() {
-        guard databasePopup.indexOfSelectedItem >= 0,
-              databasePopup.indexOfSelectedItem < databases.count else { return }
-        let db = databases[databasePopup.indexOfSelectedItem]
+        guard let db = selectedDatabase() else { return }
         AppConfig.databaseId = db.id
         Task { await reloadDatabaseDetails(db.id) }
     }
@@ -206,46 +227,59 @@ final class ShareViewController: NSViewController {
     }
 
     @objc private func send() {
-        guard let client = client else { return }
+        guard let notion = notion,
+              let accountId = Credentials.cloudflareAccountId,
+              let cfToken = Credentials.cloudflareToken else { return }
         guard let videoURL = videoURL else {
-            statusLabel.stringValue = "Aguardando o vídeo do Final Cut…"
-            return
+            statusLabel.stringValue = "Aguardando o vídeo do Final Cut…"; return
         }
-        guard pagePopup.indexOfSelectedItem >= 0, pagePopup.indexOfSelectedItem < pages.count else {
-            statusLabel.stringValue = "Selecione o registro de destino."
-            return
+        guard let page = selected(pagePopup, pages) else {
+            statusLabel.stringValue = "Selecione o registro de destino."; return
         }
-        guard propertyPopup.indexOfSelectedItem >= 0,
-              propertyPopup.indexOfSelectedItem < fileProperties.count else {
-            statusLabel.stringValue = "Selecione a propriedade de arquivo."
-            return
+        guard let urlProp = selected(urlPropertyPopup, urlProperties) else {
+            statusLabel.stringValue = "Selecione a propriedade do link (URL)."; return
         }
-        let page = pages[pagePopup.indexOfSelectedItem]
-        let property = fileProperties[propertyPopup.indexOfSelectedItem]
-        AppConfig.propertyName = property.name
+        guard let fileProp = selected(filePropertyPopup, fileProperties) else {
+            statusLabel.stringValue = "Selecione a propriedade do arquivo."; return
+        }
+        AppConfig.urlPropertyName = urlProp.name
+        AppConfig.filePropertyName = fileProp.name
 
-        setControlsEnabled(false)
+        setSelectionEnabled(false)
         progress.isHidden = false
         progress.doubleValue = 0
-        statusLabel.stringValue = "Enviando \(videoURL.lastPathComponent)…"
 
+        let cloudflare = CloudflareStreamClient(accountId: accountId, apiToken: cfToken)
         Task {
             do {
-                try await client.uploadVideo(
+                // 1) Cloudflare Stream (0–60% do progresso total)
+                let watchURL = try await cloudflare.uploadAndGetWatchURL(
                     fileURL: videoURL,
-                    pageId: page.id,
-                    propertyName: property.name
-                ) { fraction in
-                    DispatchQueue.main.async { self.progress.doubleValue = fraction }
+                    progress: { f in DispatchQueue.main.async { self.progress.doubleValue = f * 0.6 } },
+                    status: { s in DispatchQueue.main.async { self.statusLabel.stringValue = s } })
+
+                // 2) Upload do arquivo para o Notion (60–95%)
+                await self.setStatus("Anexando o arquivo no Notion…")
+                let upload = try await notion.uploadFile(fileURL: videoURL) { f in
+                    DispatchQueue.main.async { self.progress.doubleValue = 0.6 + f * 0.35 }
                 }
+
+                // 3) Grava link + arquivo no card (95–100%)
+                await self.setStatus("Gravando link e arquivo no card…")
+                try await notion.updatePage(
+                    pageId: page.id,
+                    urlProperty: urlProp.name, url: watchURL,
+                    fileProperty: fileProp.name, fileUploadId: upload.uploadId, fileName: upload.filename)
+
                 await MainActor.run {
-                    self.statusLabel.stringValue = "Concluído! Vídeo anexado em \(page.title)."
+                    self.progress.doubleValue = 1.0
+                    self.statusLabel.stringValue = "Concluído! Link no card \(page.title): \(watchURL)"
                     self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
                 }
             } catch {
                 await MainActor.run {
                     self.progress.isHidden = true
-                    self.setControlsEnabled(true)
+                    self.setSelectionEnabled(true)
                     self.statusLabel.stringValue = "Erro: \(error.localizedDescription)"
                 }
             }
@@ -254,31 +288,32 @@ final class ShareViewController: NSViewController {
 
     // MARK: - Data loading
 
-    private func selectedDatabase() -> NotionDatabase? {
-        let idx = databasePopup.indexOfSelectedItem
-        guard idx >= 0, idx < databases.count else { return nil }
-        return databases[idx]
+    private func selectedDatabase() -> NotionDatabase? { selected(databasePopup, databases) }
+
+    private func selected<T>(_ popup: NSPopUpButton, _ items: [T]) -> T? {
+        let idx = popup.indexOfSelectedItem
+        guard idx >= 0, idx < items.count else { return nil }
+        return items[idx]
     }
 
     private func reloadDatabases() async {
-        guard let client = client else { return }
+        guard let notion = notion else { return }
         await setStatus("Carregando bancos de dados…")
         do {
-            let dbs = try await client.listDatabases()
+            let dbs = try await notion.listDatabases()
             await MainActor.run {
                 self.databases = dbs
                 self.databasePopup.removeAllItems()
                 self.databasePopup.addItems(withTitles: dbs.map { $0.title })
-                if dbs.isEmpty {
-                    self.statusLabel.stringValue = "Nenhum banco compartilhado com a integração. Em Notion, abra o banco → ••• → Conexões → adicione a integração."
+                guard !dbs.isEmpty else {
+                    self.statusLabel.stringValue = "Nenhum banco compartilhado com a integração. No Notion: abra o banco → ••• → Conexões → adicione a integração."
                     return
                 }
-                // Restaura o banco padrão salvo, se existir.
                 if let saved = AppConfig.databaseId,
                    let idx = dbs.firstIndex(where: { $0.id == saved }) {
                     self.databasePopup.selectItem(at: idx)
                 }
-                self.setControlsEnabled(true)
+                self.setSelectionEnabled(true)
             }
             if let db = selectedDatabase() { await reloadDatabaseDetails(db.id) }
         } catch {
@@ -287,19 +322,23 @@ final class ShareViewController: NSViewController {
     }
 
     private func reloadDatabaseDetails(_ databaseId: String) async {
-        guard let client = client else { return }
+        guard let notion = notion else { return }
         do {
-            let (title, props) = try await client.databaseProperties(databaseId: databaseId)
+            let (title, props) = try await notion.databaseProperties(databaseId: databaseId)
             await MainActor.run {
                 self.titleProperty = title
+                self.urlProperties = props.filter { $0.type == "url" }
                 self.fileProperties = props.filter { $0.type == "files" }
-                self.propertyPopup.removeAllItems()
-                self.propertyPopup.addItems(withTitles: self.fileProperties.map { $0.name })
-                if self.fileProperties.isEmpty {
+                self.urlPropertyPopup.removeAllItems()
+                self.urlPropertyPopup.addItems(withTitles: self.urlProperties.map { $0.name })
+                self.filePropertyPopup.removeAllItems()
+                self.filePropertyPopup.addItems(withTitles: self.fileProperties.map { $0.name })
+                self.selectSaved(self.urlPropertyPopup, self.urlProperties, AppConfig.urlPropertyName)
+                self.selectSaved(self.filePropertyPopup, self.fileProperties, AppConfig.filePropertyName)
+                if self.urlProperties.isEmpty {
+                    self.statusLabel.stringValue = "Este banco não tem propriedade do tipo 'URL' para o link."
+                } else if self.fileProperties.isEmpty {
                     self.statusLabel.stringValue = "Este banco não tem propriedade do tipo 'Arquivos e mídia'."
-                } else if let saved = AppConfig.propertyName,
-                          let idx = self.fileProperties.firstIndex(where: { $0.name == saved }) {
-                    self.propertyPopup.selectItem(at: idx)
                 }
             }
             await reloadPages(databaseId: databaseId, query: searchField.stringValue)
@@ -308,11 +347,16 @@ final class ShareViewController: NSViewController {
         }
     }
 
+    private func selectSaved(_ popup: NSPopUpButton, _ items: [NotionProperty], _ saved: String?) {
+        if let saved = saved, let idx = items.firstIndex(where: { $0.name == saved }) {
+            popup.selectItem(at: idx)
+        }
+    }
+
     private func reloadPages(databaseId: String, query: String) async {
-        guard let client = client else { return }
+        guard let notion = notion else { return }
         do {
-            let result = try await client.listPages(
-                databaseId: databaseId, titleProperty: titleProperty, query: query)
+            let result = try await notion.listPages(databaseId: databaseId, titleProperty: titleProperty, query: query)
             await MainActor.run {
                 self.pages = result
                 self.pagePopup.removeAllItems()
@@ -325,11 +369,8 @@ final class ShareViewController: NSViewController {
     }
 
     private func refreshStatus() {
-        if let url = videoURL {
-            statusLabel.stringValue = "Pronto para enviar: \(url.lastPathComponent)"
-        } else {
-            statusLabel.stringValue = "Aguardando o vídeo do Final Cut…"
-        }
+        statusLabel.stringValue = videoURL.map { "Pronto para enviar: \($0.lastPathComponent)" }
+            ?? "Aguardando o vídeo do Final Cut…"
     }
 
     private func setStatus(_ text: String) async {

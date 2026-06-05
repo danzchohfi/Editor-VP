@@ -146,14 +146,9 @@ final class NotionClient {
 
     // MARK: - File upload
 
-    /// Faz o upload do vídeo e anexa na propriedade `propertyName` do registro `pageId`.
+    /// Sobe o vídeo para o Notion e devolve o `file_upload` id (sem anexar a nada).
     /// `progress` reporta de 0.0 a 1.0.
-    func uploadVideo(
-        fileURL: URL,
-        pageId: String,
-        propertyName: String,
-        progress: @escaping (Double) -> Void
-    ) async throws {
+    func uploadFile(fileURL: URL, progress: @escaping (Double) -> Void) async throws -> (uploadId: String, filename: String) {
         let fm = FileManager.default
         guard fm.fileExists(atPath: fileURL.path) else { throw NotionError.fileNotFound }
         let attrs = try fm.attributesOfItem(atPath: fileURL.path)
@@ -167,7 +162,7 @@ final class NotionClient {
             let data = try Data(contentsOf: fileURL)
             try await sendPart(uploadId: uploadId, partNumber: nil, data: data,
                                filename: filename, contentType: contentType)
-            progress(0.95)
+            progress(1.0)
         } else {
             let numberOfParts = Int(ceil(Double(fileSize) / Double(partSize)))
             uploadId = try await createFileUpload(filename: filename, contentType: contentType, parts: numberOfParts)
@@ -177,15 +172,40 @@ final class NotionClient {
                 let chunk = handle.readData(ofLength: partSize)
                 try await sendPart(uploadId: uploadId, partNumber: part, data: chunk,
                                    filename: filename, contentType: contentType)
-                progress(Double(part) / Double(numberOfParts) * 0.9)
+                progress(Double(part) / Double(numberOfParts))
             }
             try await completeFileUpload(uploadId: uploadId)
-            progress(0.95)
         }
+        return (uploadId, filename)
+    }
 
-        try await attachFile(pageId: pageId, propertyName: propertyName,
-                             uploadId: uploadId, filename: filename)
-        progress(1.0)
+    /// Atualiza um registro gravando (opcionalmente) o link numa propriedade URL
+    /// e/ou o arquivo enviado numa propriedade "Arquivos e mídia", numa só chamada.
+    func updatePage(
+        pageId: String,
+        urlProperty: String? = nil,
+        url: String? = nil,
+        fileProperty: String? = nil,
+        fileUploadId: String? = nil,
+        fileName: String? = nil
+    ) async throws {
+        var properties: [String: Any] = [:]
+        if let urlProperty = urlProperty, let url = url {
+            properties[urlProperty] = ["url": url]
+        }
+        if let fileProperty = fileProperty, let fileUploadId = fileUploadId {
+            properties[fileProperty] = [
+                "files": [[
+                    "type": "file_upload",
+                    "name": fileName ?? "video",
+                    "file_upload": ["id": fileUploadId]
+                ]]
+            ]
+        }
+        guard !properties.isEmpty else { return }
+        let request = try makeRequest(path: "pages/\(pageId)", method: "PATCH",
+                                      json: ["properties": properties])
+        try await send(request)
     }
 
     private func createFileUpload(filename: String, contentType: String, parts: Int?) async throws -> String {
@@ -224,25 +244,6 @@ final class NotionClient {
 
     private func completeFileUpload(uploadId: String) async throws {
         let request = try makeRequest(path: "file_uploads/\(uploadId)/complete", method: "POST", json: [:])
-        try await send(request)
-    }
-
-    private func attachFile(pageId: String, propertyName: String,
-                            uploadId: String, filename: String) async throws {
-        let body: [String: Any] = [
-            "properties": [
-                propertyName: [
-                    "files": [
-                        [
-                            "type": "file_upload",
-                            "name": filename,
-                            "file_upload": ["id": uploadId]
-                        ]
-                    ]
-                ]
-            ]
-        ]
-        let request = try makeRequest(path: "pages/\(pageId)", method: "PATCH", json: body)
         try await send(request)
     }
 

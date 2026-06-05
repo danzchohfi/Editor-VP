@@ -19,18 +19,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let text = NSTextField(wrappingLabelWithString: """
         Notion Export para Final Cut Pro
 
-        Esta extensão adiciona um destino "Enviar para o Notion" no menu
-        Compartilhar do Final Cut Pro.
+        Adiciona o destino "Enviar para o Notion" no menu Compartilhar.
+        Ao compartilhar, o vídeo sobe no Cloudflare Stream e o link de
+        aprovação é gravado no card do cliente no Notion (o arquivo também
+        é anexado).
 
         Configuração inicial (uma vez):
-        1. No Notion, crie uma integração interna em
-           notion.so/my-integrations e copie o "Internal Integration Secret".
-        2. Abra o banco de dados desejado → menu ••• → Conexões →
-           adicione a sua integração (assim ela enxerga o banco).
-        3. No Final Cut Pro, selecione um clipe/projeto e use
-           Arquivo → Compartilhar → Enviar para o Notion.
-        4. Cole o token na primeira vez. Depois é só escolher o banco,
-           o registro (cliente/card) e a propriedade de arquivo.
+        1. Notion: crie uma integração interna em notion.so/my-integrations
+           e copie o "Internal Integration Secret".
+        2. Notion: no banco desejado → ••• → Conexões → adicione a integração.
+        3. Cloudflare: pegue seu Account ID e crie um API Token com a
+           permissão Stream:Edit.
+        4. No Final Cut Pro: Arquivo → Compartilhar → Enviar para o Notion.
+           Na 1ª vez cole as credenciais; depois é só escolher o banco,
+           o card (cliente) e as propriedades de link e de arquivo.
 
         Se o destino não aparecer, abra Ajustes do Sistema → Geral →
         Itens de Login e Extensões → Compartilhamento e marque

@@ -1,30 +1,26 @@
 import Foundation
 import Security
 
-/// Guarda o token interno do Notion no Keychain (sandbox da própria extensão).
-/// Sem App Group / access-group explícito — usa o keychain padrão do bundle,
-/// o que funciona sem conta paga do Apple Developer.
-enum KeychainTokenStore {
+/// Guarda segredos no Keychain (sandbox da própria extensão), sem App Group /
+/// access-group explícito — funciona sem conta paga do Apple Developer.
+enum KeychainStore {
 
     private static let service = "com.vitaminapublicitaria.NotionExport"
-    private static let account = "notion_internal_token"
 
-    static func save(_ token: String) {
-        let data = Data(token.utf8)
+    static func save(_ value: String, account: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        // Remove o existente antes de inserir o novo.
         SecItemDelete(query as CFDictionary)
         var attributes = query
-        attributes[kSecValueData as String] = data
+        attributes[kSecValueData as String] = Data(value.utf8)
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
         SecItemAdd(attributes as CFDictionary, nil)
     }
 
-    static func load() -> String? {
+    static func load(account: String) -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -33,12 +29,12 @@ enum KeychainTokenStore {
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
         var result: AnyObject?
-        let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
+              let data = result as? Data else { return nil }
         return String(data: data, encoding: .utf8)
     }
 
-    static func clear() {
+    static func clear(account: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -48,19 +44,43 @@ enum KeychainTokenStore {
     }
 }
 
-/// Preferências lembradas entre exportações (banco e propriedade padrão).
-enum AppConfig {
-    private static let defaults = UserDefaults.standard
-    private static let kDatabaseId = "default_database_id"
-    private static let kPropertyName = "default_property_name"
-
-    static var databaseId: String? {
-        get { defaults.string(forKey: kDatabaseId) }
-        set { defaults.set(newValue, forKey: kDatabaseId) }
+/// Credenciais necessárias para o fluxo Cloudflare Stream + Notion.
+enum Credentials {
+    static var notionToken: String? {
+        get { KeychainStore.load(account: "notion_token") }
+        set { newValue.map { KeychainStore.save($0, account: "notion_token") } }
+    }
+    static var cloudflareToken: String? {
+        get { KeychainStore.load(account: "cloudflare_token") }
+        set { newValue.map { KeychainStore.save($0, account: "cloudflare_token") } }
     }
 
-    static var propertyName: String? {
-        get { defaults.string(forKey: kPropertyName) }
-        set { defaults.set(newValue, forKey: kPropertyName) }
+    /// O Account ID do Cloudflare não é segredo; fica em UserDefaults.
+    static var cloudflareAccountId: String? {
+        get { UserDefaults.standard.string(forKey: "cloudflare_account_id") }
+        set { UserDefaults.standard.set(newValue, forKey: "cloudflare_account_id") }
+    }
+
+    /// Há tudo o que é preciso para operar?
+    static var isComplete: Bool {
+        [notionToken, cloudflareToken, cloudflareAccountId].allSatisfy { ($0?.isEmpty == false) }
+    }
+}
+
+/// Preferências lembradas entre exportações (banco e propriedades padrão).
+enum AppConfig {
+    private static let defaults = UserDefaults.standard
+
+    static var databaseId: String? {
+        get { defaults.string(forKey: "default_database_id") }
+        set { defaults.set(newValue, forKey: "default_database_id") }
+    }
+    static var urlPropertyName: String? {
+        get { defaults.string(forKey: "default_url_property") }
+        set { defaults.set(newValue, forKey: "default_url_property") }
+    }
+    static var filePropertyName: String? {
+        get { defaults.string(forKey: "default_file_property") }
+        set { defaults.set(newValue, forKey: "default_file_property") }
     }
 }
