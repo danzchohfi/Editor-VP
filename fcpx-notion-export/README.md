@@ -26,6 +26,7 @@ fcpx-notion-export/
 ├── Shared/
 │   ├── CloudflareStreamClient.swift  Upload tus + polling + link de watch
 │   ├── NotionClient.swift            Listar bancos/registros, upload e propriedades
+│   ├── Theme.swift                   Identidade visual (cores, fontes, componentes)
 │   └── KeychainTokenStore.swift      Credenciais no Keychain + preferências
 ├── project.yml           Definição do projeto (XcodeGen)
 └── build_dmg.sh          Compila e empacota o .dmg
@@ -80,9 +81,20 @@ Account ID e token do Cloudflare) e guarda no Keychain — não pede de novo.
 
 1. Selecione um clipe ou projeto.
 2. **Arquivo → Compartilhar → Enviar para o Notion**.
-3. (1ª vez) cole as credenciais e **Salvar**.
-4. Escolha o **banco**, busque/escolha o **card (cliente)**, confirme as
-   **propriedades de link e de arquivo** e clique em **Enviar**.
+3. (1ª vez) abra **⚙ Configurações**, cole as credenciais e escolha banco e
+   propriedades — fica tudo lembrado.
+4. No dia a dia: **digite o nome do cliente** no campo de busca, **clique no
+   card** na lista e toque em **Enviar**. (Duplo-clique no card já envia.)
+
+A busca do card é o centro da tela: filtra em tempo real conforme você digita,
+então não há mais rolagem em dropdown longo.
+
+## Identidade visual
+
+Toda a aparência fica em **`Shared/Theme.swift`**. Para casar com a paleta
+oficial da Produção.app, ajuste os hex no topo do arquivo (`background`,
+`surface`, `accent`, `textPrimary`, etc.) e, se quiser, as fontes em
+`display/semibold/body`. O resto do app usa esses tokens automaticamente.
 
 A barra mostra: upload no Cloudflare → processamento → upload do arquivo no
 Notion → gravação no card. O banco e as propriedades ficam lembrados como

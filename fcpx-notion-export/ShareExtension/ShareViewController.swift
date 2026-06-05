@@ -1,42 +1,50 @@
 import Cocoa
 import UniformTypeIdentifiers
 
-/// View controller exibido pelo Final Cut Pro ao compartilhar um vídeo.
-/// Fluxo: (credenciais uma vez) -> banco -> registro/cliente -> propriedades ->
-/// sobe no Cloudflare Stream, grava o link e anexa o arquivo no card do Notion.
-final class ShareViewController: NSViewController {
+/// Tela exibida pelo Final Cut ao compartilhar. O protagonista é a busca do
+/// card: o editor digita o cliente e clica na lista. Banco/propriedades e
+/// credenciais ficam num painel de Configurações que raramente é tocado.
+final class ShareViewController: NSViewController,
+    NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
 
     // Estado
     private var videoURL: URL?
     private var notion: NotionClient?
     private var databases: [NotionDatabase] = []
     private var pages: [NotionPage] = []
+    private var selectedPage: NotionPage?
     private var urlProperties: [NotionProperty] = []
     private var fileProperties: [NotionProperty] = []
     private var titleProperty: String = ""
+    private var searchWorkItem: DispatchWorkItem?
 
-    // Credenciais
-    private let notionTokenField = NSSecureTextField()
-    private let cfAccountField = NSTextField()
-    private let cfTokenField = NSSecureTextField()
-    private let saveCredsButton = NSButton()
-    private let settingsBox = NSStackView()
-
-    // Seleção
-    private let databasePopup = NSPopUpButton()
+    // Cabeçalho / hero
+    private let videoChip = Brand.label("Aguardando vídeo do Final Cut…", font: Brand.body(13), color: Brand.textMuted)
     private let searchField = NSSearchField()
-    private let pagePopup = NSPopUpButton()
+    private let cardsTable = NSTableView()
+    private let selectionLabel = Brand.label("Nenhum card selecionado", font: Brand.semibold(13), color: Brand.textMuted)
+    private lazy var sendButton = Brand.primaryButton("Enviar para o Notion", target: self, action: #selector(send))
+
+    // Configurações
+    private let databasePopup = NSPopUpButton()
     private let urlPropertyPopup = NSPopUpButton()
     private let filePropertyPopup = NSPopUpButton()
+    private let notionTokenField = Brand.field(placeholder: "Token interno do Notion (ntn_… / secret_…)", secure: true)
+    private let cfAccountField = Brand.field(placeholder: "Cloudflare Account ID")
+    private let cfTokenField = Brand.field(placeholder: "Cloudflare API Token (Stream:Edit)", secure: true)
+    private lazy var settingsPanel = NSStackView()
+    private lazy var settingsToggle = Brand.ghostButton("⚙  Configurações", target: self, action: #selector(toggleSettings))
 
     // Feedback
-    private let statusLabel = NSTextField(labelWithString: "")
     private let progress = NSProgressIndicator()
-    private let sendButton = NSButton()
-    private let cancelButton = NSButton()
+    private let statusLabel = Brand.label("", font: Brand.body(12), color: Brand.textMuted)
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 540))
+        let root = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 640))
+        root.wantsLayer = true
+        root.layer?.backgroundColor = Brand.background.cgColor
+        root.appearance = NSAppearance(named: .darkAqua)
+        view = root
         buildUI()
     }
 
@@ -52,103 +60,137 @@ final class ShareViewController: NSViewController {
         let stack = NSStackView()
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 9
+        stack.spacing = 14
         stack.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
-            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 20),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -20)
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
+            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 22),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -22)
         ])
-
-        let titleLabel = NSTextField(labelWithString: "Exportar para aprovação (Cloudflare + Notion)")
-        titleLabel.font = .boldSystemFont(ofSize: 15)
-        stack.addArrangedSubview(titleLabel)
-
-        // Credenciais (escondidas quando já configuradas)
-        settingsBox.orientation = .vertical
-        settingsBox.alignment = .leading
-        settingsBox.spacing = 6
-        notionTokenField.placeholderString = "Token interno do Notion (ntn_… / secret_…)"
-        cfAccountField.placeholderString = "Cloudflare Account ID"
-        cfTokenField.placeholderString = "Cloudflare API Token (Stream:Edit)"
-        saveCredsButton.title = "Salvar credenciais"
-        saveCredsButton.bezelStyle = .rounded
-        saveCredsButton.target = self
-        saveCredsButton.action = #selector(saveCreds)
-        [notionTokenField, cfAccountField, cfTokenField].forEach {
-            $0.translatesAutoresizingMaskIntoConstraints = false
-            $0.widthAnchor.constraint(equalToConstant: 420).isActive = true
-            settingsBox.addArrangedSubview($0)
+        func fullWidth(_ v: NSView) {
+            v.translatesAutoresizingMaskIntoConstraints = false
+            v.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        settingsBox.addArrangedSubview(saveCredsButton)
-        stack.addArrangedSubview(settingsBox)
 
-        databasePopup.target = self
-        databasePopup.action = #selector(databaseChanged)
-        stack.addArrangedSubview(labeled("Banco de dados", fill(databasePopup)))
+        // Cabeçalho (wordmark + subtítulo)
+        let wordmark = Brand.label("Produção", font: Brand.display(22), color: Brand.textPrimary)
+        let subtitle = Brand.label("Exportar vídeo para aprovação", font: Brand.body(13), color: Brand.textMuted)
+        let header = NSStackView(views: [wordmark, subtitle])
+        header.orientation = .vertical
+        header.alignment = .leading
+        header.spacing = 2
+        stack.addArrangedSubview(header)
 
-        searchField.placeholderString = "Buscar cliente / registro…"
-        searchField.target = self
-        searchField.action = #selector(searchChanged)
-        searchField.sendsSearchStringImmediately = false
-        stack.addArrangedSubview(labeled("Filtrar", fill(searchField)))
+        // Chip do vídeo
+        let chipContent = NSStackView(views: [Brand.label("🎬", font: Brand.body(14), color: Brand.textPrimary), videoChip])
+        chipContent.orientation = .horizontal
+        chipContent.spacing = 8
+        let chip = Brand.cardContainer(chipContent, padding: 12)
+        fullWidth(chip)
+        stack.addArrangedSubview(chip)
 
-        stack.addArrangedSubview(labeled("Registro (card)", fill(pagePopup)))
-        stack.addArrangedSubview(labeled("Propriedade do link", fill(urlPropertyPopup)))
-        stack.addArrangedSubview(labeled("Propriedade do arquivo", fill(filePropertyPopup)))
+        // HERO — busca do cliente
+        let heroLabel = Brand.label("Para qual cliente?", font: Brand.semibold(15), color: Brand.textPrimary)
+        stack.addArrangedSubview(heroLabel)
 
+        searchField.placeholderString = "Digite o nome do cliente / card…"
+        searchField.delegate = self
+        searchField.font = Brand.body(14)
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.heightAnchor.constraint(equalToConstant: 38).isActive = true
+        fullWidth(searchField)
+        stack.addArrangedSubview(searchField)
+
+        // Lista de cards
+        let scroll = NSScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+        scroll.borderType = .noBorder
+        cardsTable.headerView = nil
+        cardsTable.backgroundColor = .clear
+        cardsTable.rowHeight = 38
+        cardsTable.intercellSpacing = NSSize(width: 0, height: 2)
+        cardsTable.selectionHighlightStyle = .regular
+        cardsTable.dataSource = self
+        cardsTable.delegate = self
+        cardsTable.target = self
+        cardsTable.doubleAction = #selector(send)
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("card"))
+        column.resizingMask = .autoresizingMask
+        cardsTable.addTableColumn(column)
+        scroll.documentView = cardsTable
+        let listCard = Brand.cardContainer(scroll, padding: 6)
+        fullWidth(listCard)
+        listCard.heightAnchor.constraint(equalToConstant: 190).isActive = true
+        stack.addArrangedSubview(listCard)
+
+        stack.addArrangedSubview(selectionLabel)
+
+        // Ação principal
+        fullWidth(sendButton)
+        stack.addArrangedSubview(sendButton)
+
+        // Progresso + status
         progress.style = .bar
         progress.isIndeterminate = false
         progress.minValue = 0
         progress.maxValue = 1
         progress.isHidden = true
         progress.translatesAutoresizingMaskIntoConstraints = false
-        progress.widthAnchor.constraint(equalToConstant: 440).isActive = true
+        fullWidth(progress)
         stack.addArrangedSubview(progress)
 
-        statusLabel.textColor = .secondaryLabelColor
-        statusLabel.lineBreakMode = .byWordWrapping
-        statusLabel.maximumNumberOfLines = 3
-        statusLabel.preferredMaxLayoutWidth = 440
+        statusLabel.lineBreakMode = .byTruncatingMiddle
+        statusLabel.maximumNumberOfLines = 2
+        statusLabel.translatesAutoresizingMaskIntoConstraints = false
+        fullWidth(statusLabel)
         stack.addArrangedSubview(statusLabel)
 
-        let buttons = NSStackView()
-        buttons.orientation = .horizontal
-        buttons.spacing = 10
-        cancelButton.title = "Cancelar"
-        cancelButton.bezelStyle = .rounded
-        cancelButton.target = self
-        cancelButton.action = #selector(cancel)
-        sendButton.title = "Enviar"
-        sendButton.bezelStyle = .rounded
-        sendButton.keyEquivalent = "\r"
-        sendButton.target = self
-        sendButton.action = #selector(send)
-        buttons.addArrangedSubview(cancelButton)
-        buttons.addArrangedSubview(sendButton)
-        stack.addArrangedSubview(buttons)
+        // Configurações (recolhível)
+        fullWidth(settingsToggle)
+        stack.addArrangedSubview(settingsToggle)
+        buildSettingsPanel()
+        fullWidth(settingsPanel)
+        stack.addArrangedSubview(settingsPanel)
     }
 
-    private func labeled(_ title: String, _ control: NSView) -> NSView {
-        let row = NSStackView()
-        row.orientation = .horizontal
-        row.alignment = .firstBaseline
-        row.spacing = 8
-        let label = NSTextField(labelWithString: title)
-        label.alignment = .right
-        label.widthAnchor.constraint(equalToConstant: 130).isActive = true
-        row.addArrangedSubview(label)
-        row.addArrangedSubview(control)
-        row.translatesAutoresizingMaskIntoConstraints = false
-        return row
-    }
+    private func buildSettingsPanel() {
+        settingsPanel.orientation = .vertical
+        settingsPanel.alignment = .leading
+        settingsPanel.spacing = 8
+        settingsPanel.isHidden = true
 
-    private func fill(_ control: NSView) -> NSView {
-        control.translatesAutoresizingMaskIntoConstraints = false
-        control.widthAnchor.constraint(equalToConstant: 300).isActive = true
-        return control
+        func row(_ title: String, _ control: NSView) -> NSView {
+            let label = Brand.label(title, font: Brand.body(12), color: Brand.textMuted)
+            let r = NSStackView(views: [label, control])
+            r.orientation = .vertical
+            r.alignment = .leading
+            r.spacing = 3
+            control.translatesAutoresizingMaskIntoConstraints = false
+            control.widthAnchor.constraint(equalToConstant: 432).isActive = true
+            return r
+        }
+
+        databasePopup.target = self
+        databasePopup.action = #selector(databaseChanged)
+        settingsPanel.addArrangedSubview(row("Banco de dados", databasePopup))
+        settingsPanel.addArrangedSubview(row("Propriedade do link (URL)", urlPropertyPopup))
+        settingsPanel.addArrangedSubview(row("Propriedade do arquivo", filePropertyPopup))
+
+        let divider = NSBox()
+        divider.boxType = .separator
+        divider.translatesAutoresizingMaskIntoConstraints = false
+        divider.widthAnchor.constraint(equalToConstant: 432).isActive = true
+        settingsPanel.addArrangedSubview(divider)
+
+        settingsPanel.addArrangedSubview(row("Token do Notion", notionTokenField))
+        settingsPanel.addArrangedSubview(row("Cloudflare Account ID", cfAccountField))
+        settingsPanel.addArrangedSubview(row("Cloudflare API Token", cfTokenField))
+        let save = Brand.primaryButton("Salvar credenciais", target: self, action: #selector(saveCreds))
+        save.widthAnchor.constraint(equalToConstant: 200).isActive = true
+        settingsPanel.addArrangedSubview(save)
     }
 
     // MARK: - Bootstrap
@@ -165,7 +207,11 @@ final class ShareViewController: NSViewController {
                     if let u = data as? URL { url = u }
                     else if let d = data as? Data { url = URL(dataRepresentation: d, relativeTo: nil) }
                     if let url = url {
-                        DispatchQueue.main.async { self?.videoURL = url; self?.refreshStatus() }
+                        DispatchQueue.main.async {
+                            self?.videoURL = url
+                            self?.videoChip.stringValue = url.lastPathComponent
+                            self?.videoChip.textColor = Brand.textPrimary
+                        }
                     }
                 }
                 return
@@ -179,21 +225,20 @@ final class ShareViewController: NSViewController {
         cfTokenField.stringValue = Credentials.cloudflareToken ?? ""
 
         if Credentials.isComplete {
-            settingsBox.isHidden = true
             notion = NotionClient(token: Credentials.notionToken!)
             Task { await reloadDatabases() }
         } else {
-            setSelectionEnabled(false)
-            statusLabel.stringValue = "Preencha as credenciais do Notion e do Cloudflare e salve."
+            settingsPanel.isHidden = false
+            statusLabel.stringValue = "Configure as credenciais do Notion e do Cloudflare em Configurações."
+            statusLabel.textColor = Brand.danger
         }
     }
 
-    private func setSelectionEnabled(_ enabled: Bool) {
-        [databasePopup, searchField, pagePopup, urlPropertyPopup, filePropertyPopup, sendButton]
-            .forEach { $0.isEnabled = enabled }
-    }
-
     // MARK: - Actions
+
+    @objc private func toggleSettings() {
+        settingsPanel.isHidden.toggle()
+    }
 
     @objc private func saveCreds() {
         let notionToken = notionTokenField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -201,70 +246,57 @@ final class ShareViewController: NSViewController {
         let cfToken = cfTokenField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !notionToken.isEmpty, !cfAccount.isEmpty, !cfToken.isEmpty else {
             statusLabel.stringValue = "Preencha as três credenciais."
+            statusLabel.textColor = Brand.danger
             return
         }
         Credentials.notionToken = notionToken
         Credentials.cloudflareAccountId = cfAccount
         Credentials.cloudflareToken = cfToken
         notion = NotionClient(token: notionToken)
-        settingsBox.isHidden = true
+        settingsPanel.isHidden = true
+        statusLabel.stringValue = ""
         Task { await reloadDatabases() }
     }
 
     @objc private func databaseChanged() {
-        guard let db = selectedDatabase() else { return }
+        guard let db = selected(databasePopup, databases) else { return }
         AppConfig.databaseId = db.id
         Task { await reloadDatabaseDetails(db.id) }
-    }
-
-    @objc private func searchChanged() {
-        guard let db = selectedDatabase() else { return }
-        Task { await reloadPages(databaseId: db.id, query: searchField.stringValue) }
-    }
-
-    @objc private func cancel() {
-        extensionContext?.cancelRequest(withError: NSError(domain: "NotionExport", code: -1))
     }
 
     @objc private func send() {
         guard let notion = notion,
               let accountId = Credentials.cloudflareAccountId,
               let cfToken = Credentials.cloudflareToken else { return }
-        guard let videoURL = videoURL else {
-            statusLabel.stringValue = "Aguardando o vídeo do Final Cut…"; return
-        }
-        guard let page = selected(pagePopup, pages) else {
-            statusLabel.stringValue = "Selecione o registro de destino."; return
-        }
+        guard let videoURL = videoURL else { return fail("Aguardando o vídeo do Final Cut…") }
+        guard let page = selectedPage else { return fail("Escolha o card do cliente na lista.") }
         guard let urlProp = selected(urlPropertyPopup, urlProperties) else {
-            statusLabel.stringValue = "Selecione a propriedade do link (URL)."; return
+            return fail("Defina a propriedade do link em Configurações.")
         }
         guard let fileProp = selected(filePropertyPopup, fileProperties) else {
-            statusLabel.stringValue = "Selecione a propriedade do arquivo."; return
+            return fail("Defina a propriedade do arquivo em Configurações.")
         }
         AppConfig.urlPropertyName = urlProp.name
         AppConfig.filePropertyName = fileProp.name
 
-        setSelectionEnabled(false)
+        sendButton.isEnabled = false
         progress.isHidden = false
         progress.doubleValue = 0
+        statusLabel.textColor = Brand.textMuted
 
         let cloudflare = CloudflareStreamClient(accountId: accountId, apiToken: cfToken)
         Task {
             do {
-                // 1) Cloudflare Stream (0–60% do progresso total)
                 let watchURL = try await cloudflare.uploadAndGetWatchURL(
                     fileURL: videoURL,
                     progress: { f in DispatchQueue.main.async { self.progress.doubleValue = f * 0.6 } },
                     status: { s in DispatchQueue.main.async { self.statusLabel.stringValue = s } })
 
-                // 2) Upload do arquivo para o Notion (60–95%)
                 await self.setStatus("Anexando o arquivo no Notion…")
                 let upload = try await notion.uploadFile(fileURL: videoURL) { f in
                     DispatchQueue.main.async { self.progress.doubleValue = 0.6 + f * 0.35 }
                 }
 
-                // 3) Grava link + arquivo no card (95–100%)
                 await self.setStatus("Gravando link e arquivo no card…")
                 try await notion.updatePage(
                     pageId: page.id,
@@ -273,22 +305,85 @@ final class ShareViewController: NSViewController {
 
                 await MainActor.run {
                     self.progress.doubleValue = 1.0
-                    self.statusLabel.stringValue = "Concluído! Link no card \(page.title): \(watchURL)"
+                    self.statusLabel.textColor = Brand.success
+                    self.statusLabel.stringValue = "Pronto! Enviado para \(page.title)."
                     self.extensionContext?.completeRequest(returningItems: [], completionHandler: nil)
                 }
             } catch {
                 await MainActor.run {
                     self.progress.isHidden = true
-                    self.setSelectionEnabled(true)
+                    self.sendButton.isEnabled = true
+                    self.statusLabel.textColor = Brand.danger
                     self.statusLabel.stringValue = "Erro: \(error.localizedDescription)"
                 }
             }
         }
     }
 
-    // MARK: - Data loading
+    private func fail(_ message: String) {
+        statusLabel.stringValue = message
+        statusLabel.textColor = Brand.danger
+    }
 
-    private func selectedDatabase() -> NotionDatabase? { selected(databasePopup, databases) }
+    // MARK: - Busca (debounce)
+
+    func controlTextDidChange(_ obj: Notification) {
+        guard (obj.object as? NSSearchField) === searchField else { return }
+        searchWorkItem?.cancel()
+        let text = searchField.stringValue
+        let work = DispatchWorkItem { [weak self] in
+            guard let self = self, let db = self.selected(self.databasePopup, self.databases) else { return }
+            Task { await self.reloadPages(databaseId: db.id, query: text) }
+        }
+        searchWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
+    }
+
+    // MARK: - NSTableView
+
+    func numberOfRows(in tableView: NSTableView) -> Int { pages.count }
+
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? { BrandRowView() }
+
+    func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        let id = NSUserInterfaceItemIdentifier("cardCell")
+        let cell: NSTableCellView
+        if let reused = tableView.makeView(withIdentifier: id, owner: self) as? NSTableCellView {
+            cell = reused
+        } else {
+            cell = NSTableCellView()
+            cell.identifier = id
+            let field = NSTextField(labelWithString: "")
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.font = Brand.body(14)
+            field.textColor = Brand.textPrimary
+            field.lineBreakMode = .byTruncatingTail
+            cell.addSubview(field)
+            cell.textField = field
+            NSLayoutConstraint.activate([
+                field.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
+                field.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
+                field.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
+            ])
+        }
+        cell.textField?.stringValue = pages[row].title
+        return cell
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        let row = cardsTable.selectedRow
+        if row >= 0, row < pages.count {
+            selectedPage = pages[row]
+            selectionLabel.stringValue = "✓  \(pages[row].title)"
+            selectionLabel.textColor = Brand.success
+        } else {
+            selectedPage = nil
+            selectionLabel.stringValue = "Nenhum card selecionado"
+            selectionLabel.textColor = Brand.textMuted
+        }
+    }
+
+    // MARK: - Data loading
 
     private func selected<T>(_ popup: NSPopUpButton, _ items: [T]) -> T? {
         let idx = popup.indexOfSelectedItem
@@ -298,7 +393,7 @@ final class ShareViewController: NSViewController {
 
     private func reloadDatabases() async {
         guard let notion = notion else { return }
-        await setStatus("Carregando bancos de dados…")
+        await setStatus("Carregando…")
         do {
             let dbs = try await notion.listDatabases()
             await MainActor.run {
@@ -306,18 +401,17 @@ final class ShareViewController: NSViewController {
                 self.databasePopup.removeAllItems()
                 self.databasePopup.addItems(withTitles: dbs.map { $0.title })
                 guard !dbs.isEmpty else {
-                    self.statusLabel.stringValue = "Nenhum banco compartilhado com a integração. No Notion: abra o banco → ••• → Conexões → adicione a integração."
+                    self.fail("Nenhum banco compartilhado com a integração (Notion: banco → ••• → Conexões).")
                     return
                 }
-                if let saved = AppConfig.databaseId,
-                   let idx = dbs.firstIndex(where: { $0.id == saved }) {
+                if let saved = AppConfig.databaseId, let idx = dbs.firstIndex(where: { $0.id == saved }) {
                     self.databasePopup.selectItem(at: idx)
                 }
-                self.setSelectionEnabled(true)
+                self.statusLabel.stringValue = ""
             }
-            if let db = selectedDatabase() { await reloadDatabaseDetails(db.id) }
+            if let db = selected(databasePopup, databases) { await reloadDatabaseDetails(db.id) }
         } catch {
-            await setStatus("Erro ao listar bancos: \(error.localizedDescription)")
+            await MainActor.run { self.fail("Erro ao listar bancos: \(error.localizedDescription)") }
         }
     }
 
@@ -335,15 +429,10 @@ final class ShareViewController: NSViewController {
                 self.filePropertyPopup.addItems(withTitles: self.fileProperties.map { $0.name })
                 self.selectSaved(self.urlPropertyPopup, self.urlProperties, AppConfig.urlPropertyName)
                 self.selectSaved(self.filePropertyPopup, self.fileProperties, AppConfig.filePropertyName)
-                if self.urlProperties.isEmpty {
-                    self.statusLabel.stringValue = "Este banco não tem propriedade do tipo 'URL' para o link."
-                } else if self.fileProperties.isEmpty {
-                    self.statusLabel.stringValue = "Este banco não tem propriedade do tipo 'Arquivos e mídia'."
-                }
             }
             await reloadPages(databaseId: databaseId, query: searchField.stringValue)
         } catch {
-            await setStatus("Erro ao ler propriedades: \(error.localizedDescription)")
+            await MainActor.run { self.fail("Erro ao ler propriedades: \(error.localizedDescription)") }
         }
     }
 
@@ -359,21 +448,20 @@ final class ShareViewController: NSViewController {
             let result = try await notion.listPages(databaseId: databaseId, titleProperty: titleProperty, query: query)
             await MainActor.run {
                 self.pages = result
-                self.pagePopup.removeAllItems()
-                self.pagePopup.addItems(withTitles: result.map { $0.title })
-                self.refreshStatus()
+                self.selectedPage = nil
+                self.cardsTable.reloadData()
+                self.cardsTable.deselectAll(nil)
+                self.tableViewSelectionDidChange(Notification(name: NSTableView.selectionDidChangeNotification))
             }
         } catch {
-            await setStatus("Erro ao listar registros: \(error.localizedDescription)")
+            await MainActor.run { self.fail("Erro ao listar registros: \(error.localizedDescription)") }
         }
     }
 
-    private func refreshStatus() {
-        statusLabel.stringValue = videoURL.map { "Pronto para enviar: \($0.lastPathComponent)" }
-            ?? "Aguardando o vídeo do Final Cut…"
-    }
-
     private func setStatus(_ text: String) async {
-        await MainActor.run { self.statusLabel.stringValue = text }
+        await MainActor.run {
+            self.statusLabel.textColor = Brand.textMuted
+            self.statusLabel.stringValue = text
+        }
     }
 }
