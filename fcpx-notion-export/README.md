@@ -23,6 +23,8 @@ fcpx-notion-export/
 ├── App/                  App container (host da extensão + tela de instruções)
 ├── ShareExtension/       A extensão que aparece no menu Compartilhar
 │   └── ShareViewController.swift   UI: banco → card → link/arquivo → enviar
+├── WorkflowExtension/    Painel dentro do FCPX (Janela → Extensões, opcional)
+│   └── WorkflowPanelViewController.swift   Login/config/busca de card
 ├── Shared/
 │   ├── CloudflareStreamClient.swift  Upload tus + polling + link de watch
 │   ├── NotionClient.swift            Listar bancos/registros, upload e propriedades
@@ -88,6 +90,15 @@ Account ID e token do Cloudflare) e guarda no Keychain — não pede de novo.
 
 A busca do card é o centro da tela: filtra em tempo real conforme você digita,
 então não há mais rolagem em dropdown longo.
+
+## Dois pontos de acesso no Final Cut
+
+1. **Share Extension** (Arquivo → Compartilhar → Enviar para o Notion) — faz a
+   exportação e o upload. O `build_dmg.sh` compila esta automaticamente.
+2. **Workflow Extension** (Janela → Extensões → Enviar para o Notion) — o painel
+   encaixado no FCPX, estilo Frame.io, para login/config/navegar pelos cards.
+   Usa o SDK oficial da Apple e é adicionada com poucos passos no Xcode —
+   veja **GUIA-PAINEL-FCPX.md**.
 
 ## Identidade visual
 

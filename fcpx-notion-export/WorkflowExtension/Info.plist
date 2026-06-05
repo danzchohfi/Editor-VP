@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  IMPORTANTE: este Info.plist é uma referência. O alvo da Workflow Extension
+  deve ser criado pelo TEMPLATE oficial "Final Cut Pro Workflow Extension"
+  (SDK da Apple), que já preenche NSExtensionPointIdentifier e a principal
+  class corretos. Veja GUIA-PAINEL-FCPX.md. Se criar manualmente, confirme o
+  identificador do ponto de extensão com o do template instalado no seu Xcode.
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>Enviar para o Notion</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>XPC!</string>
+    <key>NSExtension</key>
+    <dict>
+        <key>NSExtensionPointIdentifier</key>
+        <string>com.apple.FinalCut.WorkflowExtension</string>
+        <key>NSExtensionPrincipalClass</key>
+        <string>$(PRODUCT_MODULE_NAME).ProExtensionPrincipalClass</string>
+    </dict>
+</dict>
+</plist>

@@ -83,4 +83,14 @@ enum AppConfig {
         get { defaults.string(forKey: "default_file_property") }
         set { defaults.set(newValue, forKey: "default_file_property") }
     }
+
+    /// Card pré-selecionado no painel (usado para pré-marcar no Compartilhar).
+    static var preferredCardId: String? {
+        get { defaults.string(forKey: "preferred_card_id") }
+        set { defaults.set(newValue, forKey: "preferred_card_id") }
+    }
+    static var preferredCardTitle: String? {
+        get { defaults.string(forKey: "preferred_card_title") }
+        set { defaults.set(newValue, forKey: "preferred_card_title") }
+    }
 }
