@@ -4,24 +4,39 @@ import Cocoa
 /// ajuste apenas os hex e as fontes abaixo (https://www.producao.app/identidade).
 enum Brand {
 
-    // MARK: - Cores (ajuste aqui para a paleta oficial)
-    static let background  = NSColor(hex: "#0B0B0F")   // fundo da janela
-    static let surface     = NSColor(hex: "#16161C")   // cartões / campos
-    static let surfaceAlt  = NSColor(hex: "#21212B")   // hover / linhas
-    static let accent      = NSColor(hex: "#6E56CF")   // cor de marca / ações
-    static let accentHover = NSColor(hex: "#8169DA")
-    static let textPrimary = NSColor(hex: "#F4F4F6")
-    static let textMuted   = NSColor(hex: "#9A9AA6")
-    static let border      = NSColor(hex: "#2A2A33")
-    static let success     = NSColor(hex: "#3DD68C")
-    static let danger      = NSColor(hex: "#F1666B")
+    // MARK: - Cores — identidade Vitamina (producao.app)
+    static let background   = NSColor(hex: "#08100E")   // preto esverdeado
+    static let surface      = NSColor(hex: "#111A17")   // cartões / campos
+    static let surfaceAlt   = NSColor(hex: "#1A2521")   // hover / linhas
+    static let accent       = NSColor(hex: "#15594D")   // verde-petróleo (CTA preenchido)
+    static let accentHover  = NSColor(hex: "#1C6E5F")
+    static let accentBright = NSColor(hex: "#2FB293")   // verde vivo (ponto / destaques)
+    static let textPrimary  = NSColor(hex: "#F2F6F4")
+    static let textMuted    = NSColor(hex: "#8B968F")
+    static let border       = NSColor(hex: "#242E2A")
+    static let success      = NSColor(hex: "#2FB293")
+    static let danger       = NSColor(hex: "#E8635E")
 
-    // MARK: - Tipografia
-    static func display(_ size: CGFloat = 20) -> NSFont { .systemFont(ofSize: size, weight: .bold) }
+    // MARK: - Tipografia (sans pesada no display, como o site)
+    static func display(_ size: CGFloat = 22) -> NSFont { .systemFont(ofSize: size, weight: .heavy) }
     static func semibold(_ size: CGFloat = 14) -> NSFont { .systemFont(ofSize: size, weight: .semibold) }
     static func body(_ size: CGFloat = 13) -> NSFont { .systemFont(ofSize: size, weight: .regular) }
 
     static let radius: CGFloat = 12
+
+    /// Wordmark "vitamina." com o ponto na cor de marca.
+    static func wordmark(size: CGFloat = 24) -> NSTextField {
+        let heavy = NSFont.systemFont(ofSize: size, weight: .heavy)
+        let mark = NSMutableAttributedString(string: "vitamina", attributes: [
+            .font: heavy, .foregroundColor: textPrimary, .kern: -0.5
+        ])
+        mark.append(NSAttributedString(string: ".", attributes: [
+            .font: heavy, .foregroundColor: accentBright
+        ]))
+        let label = NSTextField(labelWithAttributedString: mark)
+        label.isSelectable = false
+        return label
+    }
 
     // MARK: - Componentes reutilizáveis
 
@@ -172,7 +187,7 @@ final class PaddedSecureField: NSSecureTextField {
 final class BrandRowView: NSTableRowView {
     override func drawSelection(in dirtyRect: NSRect) {
         guard selectionHighlightStyle != .none else { return }
-        Brand.accent.withAlphaComponent(0.22).setFill()
+        Brand.accentBright.withAlphaComponent(0.20).setFill()
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 6, dy: 2), xRadius: 8, yRadius: 8)
         path.fill()
     }

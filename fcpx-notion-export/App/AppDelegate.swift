@@ -13,7 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             contentRect: NSRect(x: 0, y: 0, width: 560, height: 460),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered, defer: false)
-        window.title = "Produção · Exportar para o Notion"
+        window.title = "Vitamina · Exportar para o Notion"
         window.center()
         window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = Brand.background
@@ -33,7 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             stack.topAnchor.constraint(equalTo: content.topAnchor, constant: 28)
         ])
 
-        stack.addArrangedSubview(Brand.label("Produção", font: Brand.display(26), color: Brand.textPrimary))
+        stack.addArrangedSubview(Brand.wordmark(size: 30))
         stack.addArrangedSubview(Brand.label("Exportar do Final Cut Pro para aprovação",
                                              font: Brand.body(14), color: Brand.textMuted))
 

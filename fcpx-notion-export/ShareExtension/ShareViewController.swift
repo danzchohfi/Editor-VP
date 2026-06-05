@@ -75,7 +75,7 @@ final class ShareViewController: NSViewController,
         }
 
         // Cabeçalho (wordmark + subtítulo)
-        let wordmark = Brand.label("Produção", font: Brand.display(22), color: Brand.textPrimary)
+        let wordmark = Brand.wordmark(size: 24)
         let subtitle = Brand.label("Exportar vídeo para aprovação", font: Brand.body(13), color: Brand.textMuted)
         let header = NSStackView(views: [wordmark, subtitle])
         header.orientation = .vertical
