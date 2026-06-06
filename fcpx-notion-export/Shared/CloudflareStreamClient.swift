@@ -38,13 +38,13 @@ final class CloudflareStreamClient {
         self.session = session
     }
 
-    /// Faz o upload completo e retorna o link de watch já pronto para tocar.
+    /// Faz o upload completo e retorna o UID do vídeo e o link de watch.
     /// `progress` 0.0–1.0; `status` reporta a etapa atual.
     func uploadAndGetWatchURL(
         fileURL: URL,
         progress: @escaping (Double) -> Void,
         status: @escaping (String) -> Void
-    ) async throws -> String {
+    ) async throws -> (uid: String, watchURL: String) {
         let fm = FileManager.default
         guard fm.fileExists(atPath: fileURL.path) else { throw CloudflareError.fileNotFound }
         let fileSize = (try fm.attributesOfItem(atPath: fileURL.path)[.size] as? Int) ?? 0
@@ -67,7 +67,7 @@ final class CloudflareStreamClient {
         status("Processando o vídeo no Cloudflare…")
         let watchURL = try await waitUntilReady(uid: uid) { progress(0.85 + $0 * 0.15) }
         progress(1.0)
-        return watchURL
+        return (uid, watchURL)
     }
 
     // MARK: - tus

@@ -61,6 +61,22 @@ enum Credentials {
         set { UserDefaults.standard.set(newValue, forKey: "cloudflare_account_id") }
     }
 
+    /// (Opcional) Endpoint de ingest do backend da equipe. Vazio = desligado.
+    static var ingestURL: String? {
+        get { UserDefaults.standard.string(forKey: "ingest_url") }
+        set { UserDefaults.standard.set(newValue, forKey: "ingest_url") }
+    }
+    /// (Opcional) Segredo enviado no header x-api-key para o ingest.
+    static var ingestSecret: String? {
+        get { KeychainStore.load(account: "ingest_secret") }
+        set { newValue.map { KeychainStore.save($0, account: "ingest_secret") } }
+    }
+
+    /// O backend está configurado (URL + segredo presentes)?
+    static var backendEnabled: Bool {
+        (ingestURL?.isEmpty == false) && (ingestSecret?.isEmpty == false)
+    }
+
     /// Há tudo o que é preciso para operar?
     static var isComplete: Bool {
         [notionToken, cloudflareToken, cloudflareAccountId].allSatisfy { ($0?.isEmpty == false) }

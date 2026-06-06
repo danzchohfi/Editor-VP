@@ -33,6 +33,8 @@ final class ShareViewController: NSViewController,
     private let notionTokenField = Brand.field(placeholder: "Token interno do Notion (ntn_… / secret_…)", secure: true)
     private let cfAccountField = Brand.field(placeholder: "Cloudflare Account ID")
     private let cfTokenField = Brand.field(placeholder: "Cloudflare API Token (Stream:Edit)", secure: true)
+    private let ingestURLField = Brand.field(placeholder: "(Opcional) URL de ingest do backend")
+    private let ingestSecretField = Brand.field(placeholder: "(Opcional) Segredo do ingest (x-api-key)", secure: true)
     private lazy var settingsPanel = NSStackView()
     private lazy var settingsToggle = Brand.ghostButton("⚙  Configurações", target: self, action: #selector(toggleSettings))
 
@@ -189,6 +191,8 @@ final class ShareViewController: NSViewController,
         settingsPanel.addArrangedSubview(row("Token do Notion", notionTokenField))
         settingsPanel.addArrangedSubview(row("Cloudflare Account ID", cfAccountField))
         settingsPanel.addArrangedSubview(row("Cloudflare API Token", cfTokenField))
+        settingsPanel.addArrangedSubview(row("Backend · URL de ingest (opcional)", ingestURLField))
+        settingsPanel.addArrangedSubview(row("Backend · Segredo (opcional)", ingestSecretField))
         let save = Brand.primaryButton("Salvar credenciais", target: self, action: #selector(saveCreds))
         save.widthAnchor.constraint(equalToConstant: 200).isActive = true
         settingsPanel.addArrangedSubview(save)
@@ -224,6 +228,8 @@ final class ShareViewController: NSViewController,
         notionTokenField.stringValue = Credentials.notionToken ?? ""
         cfAccountField.stringValue = Credentials.cloudflareAccountId ?? ""
         cfTokenField.stringValue = Credentials.cloudflareToken ?? ""
+        ingestURLField.stringValue = Credentials.ingestURL ?? ""
+        ingestSecretField.stringValue = Credentials.ingestSecret ?? ""
 
         if Credentials.isComplete {
             notion = NotionClient(token: Credentials.notionToken!)
@@ -253,6 +259,9 @@ final class ShareViewController: NSViewController,
         Credentials.notionToken = notionToken
         Credentials.cloudflareAccountId = cfAccount
         Credentials.cloudflareToken = cfToken
+        // Backend é opcional: salvo como está (vazio = desligado).
+        Credentials.ingestURL = ingestURLField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        Credentials.ingestSecret = ingestSecretField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         notion = NotionClient(token: notionToken)
         settingsPanel.isHidden = true
         statusLabel.stringValue = ""
@@ -286,22 +295,37 @@ final class ShareViewController: NSViewController,
         statusLabel.textColor = Brand.textMuted
 
         let cloudflare = CloudflareStreamClient(accountId: accountId, apiToken: cfToken)
+        let projectName = (videoURL.lastPathComponent as NSString).deletingPathExtension
         Task {
             do {
-                let watchURL = try await cloudflare.uploadAndGetWatchURL(
+                let cf = try await cloudflare.uploadAndGetWatchURL(
                     fileURL: videoURL,
-                    progress: { f in DispatchQueue.main.async { self.progress.doubleValue = f * 0.6 } },
+                    progress: { f in DispatchQueue.main.async { self.progress.doubleValue = f * 0.55 } },
                     status: { s in DispatchQueue.main.async { self.statusLabel.stringValue = s } })
 
                 await self.setStatus("Anexando o arquivo no Notion…")
                 let upload = try await notion.uploadFile(fileURL: videoURL) { f in
-                    DispatchQueue.main.async { self.progress.doubleValue = 0.6 + f * 0.35 }
+                    DispatchQueue.main.async { self.progress.doubleValue = 0.55 + f * 0.3 }
                 }
 
-                await self.setStatus("Gravando link e arquivo no card…")
+                // Por padrão grava o link do Cloudflare. Se o backend estiver
+                // configurado, ele devolve o link de aprovação e usamos esse.
+                var linkToStore = cf.watchURL
+                if Credentials.backendEnabled,
+                   let urlString = Credentials.ingestURL, let url = URL(string: urlString),
+                   let secret = Credentials.ingestSecret {
+                    await self.setStatus("Avisando o sistema de aprovação…")
+                    let backend = BackendClient(ingestURL: url, apiKey: secret)
+                    let result = try await backend.ingest(
+                        notionPageId: page.id, cloudflareUid: cf.uid,
+                        clientName: page.title, projectName: projectName)
+                    if let approval = result.approvalUrl { linkToStore = approval }
+                }
+
+                await self.setStatus("Gravando no card…")
                 try await notion.updatePage(
                     pageId: page.id,
-                    urlProperty: urlProp.name, url: watchURL,
+                    urlProperty: urlProp.name, url: linkToStore,
                     fileProperty: fileProp.name, fileUploadId: upload.uploadId, fileName: upload.filename)
 
                 await MainActor.run {

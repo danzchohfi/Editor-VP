@@ -211,4 +211,31 @@ segurança nem na página do cliente.
 **Precisa definir:** em quais propriedades do Notion vivem o **status** e o
 **texto de ajustes** (ou se o texto fica como **comentário** da página — o que
 muda a forma de ler via API).
+
+## 10. Contrato do ingest (extensão → backend)
+
+A Share Extension pode (opcionalmente) avisar o backend após o upload. Se a
+**URL de ingest** e o **segredo** estiverem configurados nas Configurações da
+extensão, ela faz:
+
 ```
+POST <ingestURL>
+Headers: Content-Type: application/json
+         x-api-key: <segredo>
+Body: {
+  "notionPageId": "<id do card no Notion>",
+  "cloudflareUid": "<uid do vídeo no Cloudflare Stream>",
+  "clientName":   "<título do card>",
+  "projectName":  "<nome do arquivo, sem extensão>",
+  "version":      1
+}
+```
+
+Resposta esperada (200): `{ "approvalUrl": "https://.../aprovar/<token>" }`.
+- Se `approvalUrl` vier, a extensão grava **esse** link na propriedade URL do
+  card (em vez do link cru do Cloudflare).
+- Se o backend não estiver configurado, a extensão grava o link `/watch` do
+  Cloudflare, como antes (comportamento atual, sem quebrar nada).
+
+O backend, ao receber o ingest, é quem cuida de: status no Notion, montagem do
+link de aprovação, e disparo do WhatsApp.
