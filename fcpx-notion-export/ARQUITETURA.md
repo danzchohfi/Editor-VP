@@ -193,11 +193,22 @@ assinar fica SÓ no backend**, nunca no app do Mac. A extensão só tem
 > aprovação". O **backend** cuida de assinar URL, watermark dinâmica,
 > `allowedOrigins`, página e WhatsApp.
 
-## 9. Decisões em aberto (itens 4 e 5)
+## 9. Decisões tomadas (itens 4 e 5)
 
-1. **Comentários:** timecode + texto, ou também desenho no frame?
-2. **Onde o editor vê o feedback:** Notion, painel no FCPX, ou ambos?
-3. **Watermark:** logo fixa + overlay com nome do cliente (recomendado), só logo,
-   ou burn-in forense por viewer (caro)?
-4. **Expiração** dos links de aprovação: sim/não e prazo.
+- **Item 4 — feedback:** **sem** comentários com timecode. Mantém-se apenas
+  **Aprovar / Pedir ajustes + texto livre** (já coberto pelo fluxo atual).
+- **Onde o editor vê:** **Notion + painel dentro do Final Cut** (ambos).
+- **Item 5 — watermark/segurança:** **não é necessário** por enquanto (sem
+  signed URLs, sem watermark, sem expiração). Vídeos seguem com link direto.
+
+### Escopo resultante (a única peça nova)
+
+Trazer para o **painel da Workflow Extension** (dentro do FCPX) o **status de
+aprovação** e o **texto de "pedir ajustes"** de cada card, lidos do Notion —
+fechando o loop para o editor sem sair do Final Cut. Nada muda no item de
+segurança nem na página do cliente.
+
+**Precisa definir:** em quais propriedades do Notion vivem o **status** e o
+**texto de ajustes** (ou se o texto fica como **comentário** da página — o que
+muda a forma de ler via API).
 ```
