@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 /// Tela exibida pelo Final Cut ao compartilhar. O protagonista é a busca do
 /// card: o editor digita o cliente e clica na lista. Banco/propriedades e
 /// credenciais ficam num painel de Configurações que raramente é tocado.
+@MainActor
 final class ShareViewController: NSViewController,
     NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
 

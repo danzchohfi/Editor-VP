@@ -8,6 +8,7 @@ import Cocoa
 /// Esta classe é AppKit puro (não depende do SDK do Final Cut). Quem a conecta
 /// ao FCPX é a "principal class" gerada pelo template oficial da Apple — veja
 /// GUIA-PAINEL-FCPX.md.
+@MainActor
 final class WorkflowPanelViewController: NSViewController,
     NSTableViewDataSource, NSTableViewDelegate, NSSearchFieldDelegate {
 
