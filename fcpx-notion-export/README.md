@@ -1,7 +1,38 @@
-# Notion Export — extensão de Compartilhamento para Final Cut Pro
+# Notion Export — integração Final Cut Pro · Cloudflare · Notion
 
-Adiciona um destino **"Enviar para o Notion"** no menu *Compartilhar* do Final
-Cut Pro, voltado ao **fluxo de aprovação do cliente**:
+> **Resumo executivo.** Solução `vitamina.` para o fluxo de **aprovação de
+> vídeos** pelo cliente, integrada ao Final Cut Pro. O editor exporta do FCPX;
+> o vídeo sobe no **Cloudflare Stream**; o link e o arquivo vão para o **card do
+> cliente no Notion**; e o sistema da equipe (Vercel) dispara o link por
+> **WhatsApp** para aprovação. O retorno do cliente (status + ajustes) volta a
+> ser visível para o editor **dentro do próprio Final Cut**.
+
+## Dois pontos de acesso no Final Cut
+
+| Acesso | Onde aparece | Para quê | Build |
+|---|---|---|---|
+| **Share Extension** | Arquivo → Compartilhar → Enviar para o Notion | Exportar o vídeo: sobe no Cloudflare + grava link/arquivo no card | **Automático** via `build_dmg.sh` |
+| **Workflow Extension (painel)** | Janela → Extensões → Enviar para o Notion | Login/config, buscar card, e ver **status + feedback do cliente** sem sair do FCPX | Passos no Xcode com o **SDK da Apple** — ver `GUIA-PAINEL-FCPX.md` |
+
+## Estado de cada parte
+
+- ✅ Export FCPX → Cloudflare Stream (upload `tus`, aguenta arquivo grande).
+- ✅ Grava **link (propriedade URL)** + **arquivo (Arquivos e mídia)** no card.
+- ✅ Identidade visual `vitamina.` centralizada em `Shared/Theme.swift`.
+- ✅ Painel no FCPX com busca de card e **status + comentários ("pedir ajustes")**
+  lidos do Notion.
+- ➖ Comentários com timecode e watermark/signed URLs: **fora de escopo** por
+  decisão da equipe (ver `ARQUITETURA.md`).
+
+## Documentos
+
+- `GUIA-MAC.md` — gerar o `.dmg` do zero (para quem nunca usou Xcode).
+- `GUIA-PAINEL-FCPX.md` — adicionar o painel (Workflow Extension) no Mac.
+- `ARQUITETURA.md` — mapa da solução de aprovação e decisões.
+
+---
+
+## Fluxo da Share Extension (exportação)
 
 1. O editor compartilha o vídeo no Final Cut.
 2. A extensão **sobe o vídeo no Cloudflare Stream** (upload resumável `tus`,
@@ -10,7 +41,7 @@ Cut Pro, voltado ao **fluxo de aprovação do cliente**:
    (`https://customer-XXXX.cloudflarestream.com/<id>/watch`).
 4. No **card do cliente** escolhido no Notion, grava o **link numa propriedade
    URL** e **anexa o arquivo numa propriedade "Arquivos e mídia"**.
-5. Você copia o link do card e manda no WhatsApp para o cliente aprovar.
+5. O sistema da equipe envia o link por WhatsApp para o cliente aprovar.
 
 > **Importante:** é um app **macOS nativo**. Compilar e gerar o `.dmg` precisa
 > ser feito **num Mac com Xcode** — não há como gerar o `.dmg` em Linux/CI. O
@@ -94,15 +125,6 @@ Account ID e token do Cloudflare) e guarda no Keychain — não pede de novo.
 
 A busca do card é o centro da tela: filtra em tempo real conforme você digita,
 então não há mais rolagem em dropdown longo.
-
-## Dois pontos de acesso no Final Cut
-
-1. **Share Extension** (Arquivo → Compartilhar → Enviar para o Notion) — faz a
-   exportação e o upload. O `build_dmg.sh` compila esta automaticamente.
-2. **Workflow Extension** (Janela → Extensões → Enviar para o Notion) — o painel
-   encaixado no FCPX, estilo Frame.io, para login/config/navegar pelos cards.
-   Usa o SDK oficial da Apple e é adicionada com poucos passos no Xcode —
-   veja **GUIA-PAINEL-FCPX.md**.
 
 ## Identidade visual
 
