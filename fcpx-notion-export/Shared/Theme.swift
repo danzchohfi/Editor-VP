@@ -46,7 +46,7 @@ enum Brand {
         button.fill = accent
         button.hoverFill = accentHover
         button.titleColor = .white
-        button.font = semibold(14)
+        button.titleFont = semibold(14)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.heightAnchor.constraint(equalToConstant: 40).isActive = true
         return button
@@ -59,7 +59,7 @@ enum Brand {
         button.hoverFill = surfaceAlt
         button.titleColor = textMuted
         button.borderColor = border
-        button.font = semibold(13)
+        button.titleFont = semibold(13)
         button.translatesAutoresizingMaskIntoConstraints = false
         button.heightAnchor.constraint(equalToConstant: 40).isActive = true
         return button
@@ -119,7 +119,7 @@ final class HoverButton: NSButton {
     var hoverFill: NSColor = .clear
     var borderColor: NSColor? { didSet { needsDisplay = true } }
     var titleColor: NSColor = .white { didSet { applyTitle() } }
-    var font: NSFont = .systemFont(ofSize: 13) { didSet { applyTitle() } }
+    var titleFont: NSFont = .systemFont(ofSize: 13) { didSet { applyTitle() } }
     private var hovering = false
     private var trackingAreaRef: NSTrackingArea?
 
@@ -141,7 +141,7 @@ final class HoverButton: NSButton {
 
     private func applyTitle() {
         attributedTitle = NSAttributedString(string: title, attributes: [
-            .foregroundColor: titleColor, .font: font
+            .foregroundColor: titleColor, .font: titleFont
         ])
     }
 
@@ -169,17 +169,61 @@ final class HoverButton: NSButton {
     }
 }
 
-/// NSTextField com padding interno horizontal.
-final class PaddedTextField: NSTextField {
-    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12) }
+/// O padding horizontal real mora na CÉLULA (NSCell), não no NSTextField.
+private let kFieldInset: CGFloat = 10
+
+/// Célula com recuo horizontal para o texto.
+final class PaddedTextFieldCell: NSTextFieldCell {
     override func drawingRect(forBounds rect: NSRect) -> NSRect {
-        super.drawingRect(forBounds: rect.insetBy(dx: 12, dy: 0))
+        super.drawingRect(forBounds: rect.insetBy(dx: kFieldInset, dy: 0))
+    }
+    override func titleRect(forBounds rect: NSRect) -> NSRect {
+        super.titleRect(forBounds: rect.insetBy(dx: kFieldInset, dy: 0))
+    }
+    override func edit(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText,
+                       delegate: Any?, event: NSEvent?) {
+        super.edit(withFrame: rect.insetBy(dx: kFieldInset, dy: 0), in: controlView,
+                   editor: textObj, delegate: delegate, event: event)
+    }
+    override func select(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText,
+                         delegate: Any?, start selStart: Int, length selLength: Int) {
+        super.select(withFrame: rect.insetBy(dx: kFieldInset, dy: 0), in: controlView,
+                     editor: textObj, delegate: delegate, start: selStart, length: selLength)
     }
 }
-final class PaddedSecureField: NSSecureTextField {
-    override var alignmentRectInsets: NSEdgeInsets { NSEdgeInsets(top: 0, left: 12, bottom: 0, right: 12) }
+
+/// Versão segura (senha) da célula com recuo.
+final class PaddedSecureTextFieldCell: NSSecureTextFieldCell {
     override func drawingRect(forBounds rect: NSRect) -> NSRect {
-        super.drawingRect(forBounds: rect.insetBy(dx: 12, dy: 0))
+        super.drawingRect(forBounds: rect.insetBy(dx: kFieldInset, dy: 0))
+    }
+    override func titleRect(forBounds rect: NSRect) -> NSRect {
+        super.titleRect(forBounds: rect.insetBy(dx: kFieldInset, dy: 0))
+    }
+    override func edit(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText,
+                       delegate: Any?, event: NSEvent?) {
+        super.edit(withFrame: rect.insetBy(dx: kFieldInset, dy: 0), in: controlView,
+                   editor: textObj, delegate: delegate, event: event)
+    }
+    override func select(withFrame rect: NSRect, in controlView: NSView, editor textObj: NSText,
+                         delegate: Any?, start selStart: Int, length selLength: Int) {
+        super.select(withFrame: rect.insetBy(dx: kFieldInset, dy: 0), in: controlView,
+                     editor: textObj, delegate: delegate, start: selStart, length: selLength)
+    }
+}
+
+/// NSTextField com padding interno horizontal.
+final class PaddedTextField: NSTextField {
+    override class var cellClass: AnyClass? {
+        get { PaddedTextFieldCell.self }
+        set {}
+    }
+}
+/// NSSecureTextField com padding interno horizontal.
+final class PaddedSecureField: NSSecureTextField {
+    override class var cellClass: AnyClass? {
+        get { PaddedSecureTextFieldCell.self }
+        set {}
     }
 }
 
