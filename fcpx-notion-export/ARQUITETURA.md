@@ -125,13 +125,79 @@
 
 ## 6. Decisões em aberto (para afinar o plano)
 
-1. **Quem é o dono da verdade do status** — Notion ou o sistema da Vercel?
-2. **O sistema na Vercel tem backend/banco** capaz de hospedar a página de
-   aprovação e receber webhooks? Quais tecnologias (Next.js? banco?)?
-3. **A integração de WhatsApp** atual é disparável por API (oficial / Z-API /
-   Twilio)? Dá pra acionar programaticamente a partir de um webhook?
-4. **Feedback do cliente:** basta *Aprovar / Pedir ajustes + texto*, ou querem
-   **comentários com timecode** (estilo Frame.io)?
-5. **Privacidade:** os vídeos são sensíveis a vazamento? Vale signed URL +
-   watermark?
+> **Status (informado pela equipe):** os itens 1, 2 e 3 (status como fonte da
+> verdade, backend na Vercel e WhatsApp disparável por API) **já estão em
+> produção**. O foco passa a ser **4 (feedback com timecode)** e
+> **5 (segurança/watermark)**, detalhados abaixo.
+
+## 7. Item 4 — Comentários com timecode (revisão estilo Frame.io)
+
+**Objetivo:** o cliente deixa feedback preso a um momento do vídeo
+("aos 0:42, tira essa cartela"), rastreável, ligado à versão, e o editor
+consome isso no fluxo dele.
+
+**Como encaixa na nossa stack (sem ferramenta externa):**
+- O **Stream Player do Cloudflare** expõe API JS (`player.currentTime`,
+  `play/pause`, `seek`, eventos). Então na **página de aprovação (Vercel)**:
+  - botão **"Comentar neste ponto"** captura o `currentTime`;
+  - salva `{versão, timecode_seg, texto, autor, criado_em, status}`;
+  - lista de comentários abaixo do player, cada um **clicável para saltar** ao
+    timecode.
+- **Onde guardar:** no banco de vocês (Vercel) como dono do dado, **espelhando
+  um resumo no Notion** (uma base "Feedback" com relação ao card + Número
+  `timecode` + Texto + Status `Aberto/Resolvido`). Assim o editor vê no hub
+  (Notion) e o histórico fica por versão.
+- **Bônus de alto valor:** o **painel dentro do Final Cut** (a Workflow Extension
+  que já criamos) pode **listar os comentários do projeto atual** — o editor lê
+  o feedback do cliente sem sair do FCPX.
+
+**Níveis (faseável):**
+1. **Timecode + texto** (recomendado p/ v1) — cobre ~90% do valor.
+2. **+ Desenho no frame** (anotação sobre a imagem) — Frame.io completo; bem mais
+   caro (overlay em canvas + coordenadas). Só se houver demanda real.
+
+**O que muda na extensão do FCPX:** nada. É trabalho de backend + página.
+
+## 8. Item 5 — Segurança e watermark (anti-vazamento)
+
+**Objetivo:** material pré-aprovação não vaza; se o link circular, não toca; e
+desencorajar gravação de tela com identificação do espectador.
+
+**Mecanismos do Cloudflare Stream:**
+- **`requireSignedURLs: true`** — playback exige um token (JWT) assinado no
+  backend, curto (com `exp`). O link cru `/watch` deixa de tocar.
+- **`allowedOrigins`** — o vídeo só toca **embedado no nosso domínio** (a página
+  de aprovação), não em qualquer lugar.
+- **Watermark fixa** (perfil de watermark do Cloudflare) — queima a **logo
+  vitamina** no vídeo. É estática (mesma para todos).
+- **Watermark dinâmica por espectador** (nome/e-mail/data do cliente) — feita
+  como **overlay no player** (DOM/CSS) na página. Desencoraja e identifica a
+  sessão; **não** é forense (um técnico remove). Burn-in forense por espectador
+  exigiria transcode por viewer → **caro**, normalmente não vale.
+- **Download desligado** (sem MP4 baixável) — dificulta ripar.
+- **Expiração** do link de aprovação (após aprovar ou após N dias) — opcional.
+
+**Regra de ouro de segurança:** a **chave de assinatura / token com poder de
+assinar fica SÓ no backend**, nunca no app do Mac. A extensão só tem
+`Stream:Edit` para subir.
+
+**O que muda na extensão do FCPX (pequeno):**
+- Subir o vídeo já **privado** (`requiresignedurls = true` na criação do upload).
+- Gravar no Notion **o UID do vídeo no Cloudflare** (além/no lugar do link cru),
+  para o backend assinar o token e montar a página de aprovação.
+- O link enviado ao cliente passa a ser a **página de aprovação** (montada pelo
+  backend), não o `/watch`.
+
+> Resumo da separação de responsabilidades: a **extensão** termina em
+> "vídeo privado no Cloudflare + UID/card no Notion + status = Aguardando
+> aprovação". O **backend** cuida de assinar URL, watermark dinâmica,
+> `allowedOrigins`, página e WhatsApp.
+
+## 9. Decisões em aberto (itens 4 e 5)
+
+1. **Comentários:** timecode + texto, ou também desenho no frame?
+2. **Onde o editor vê o feedback:** Notion, painel no FCPX, ou ambos?
+3. **Watermark:** logo fixa + overlay com nome do cliente (recomendado), só logo,
+   ou burn-in forense por viewer (caro)?
+4. **Expiração** dos links de aprovação: sim/não e prazo.
 ```
