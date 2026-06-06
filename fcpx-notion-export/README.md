@@ -70,6 +70,10 @@ O `.dmg` final fica em `fcpx-notion-export/dist/NotionExport.dmg`.
 2. No banco de dados desejado → **•••** → **Conexões** → adicione a integração.
 3. O banco precisa ter uma propriedade do tipo **URL** (para o link) e uma do
    tipo **Arquivos e mídia** (para o arquivo).
+4. Para o painel mostrar o **feedback do cliente** (status + "pedir ajustes"),
+   a integração precisa da capability **"Read comments"** habilitada, e o banco
+   deve ter uma propriedade de **Status** (tipo Status ou Select). O texto de
+   ajustes é lido dos **comentários** da página do card.
 
 ### Cloudflare Stream
 1. Pegue o seu **Account ID** (no painel da Cloudflare).

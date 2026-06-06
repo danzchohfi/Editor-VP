@@ -17,6 +17,7 @@ final class WorkflowPanelViewController: NSViewController,
     private var pages: [NotionPage] = []
     private var urlProperties: [NotionProperty] = []
     private var fileProperties: [NotionProperty] = []
+    private var statusProperties: [NotionProperty] = []
     private var titleProperty = ""
     private var searchWorkItem: DispatchWorkItem?
 
@@ -31,7 +32,14 @@ final class WorkflowPanelViewController: NSViewController,
     private let cardsTable = NSTableView()
     private let urlPropertyPopup = NSPopUpButton()
     private let filePropertyPopup = NSPopUpButton()
+    private let statusPropertyPopup = NSPopUpButton()
     private let statusLabel = Brand.label("", font: Brand.body(12), color: Brand.textMuted)
+
+    // Feedback do cliente (status + comentários do card selecionado)
+    private let feedbackTitle = Brand.label("Feedback do cliente", font: Brand.semibold(13), color: Brand.textPrimary)
+    private let feedbackBadge = Brand.label("", font: Brand.semibold(12), color: Brand.accentBright)
+    private let feedbackBody = Brand.label("Selecione um card para ver o status e os ajustes.",
+                                           font: Brand.body(12), color: Brand.textMuted)
 
     override func loadView() {
         let root = NSView(frame: NSRect(x: 0, y: 0, width: 360, height: 640))
@@ -118,11 +126,28 @@ final class WorkflowPanelViewController: NSViewController,
         listCard.heightAnchor.constraint(equalToConstant: 150).isActive = true
         stack.addArrangedSubview(listCard)
 
+        // Feedback do cliente (status + comentários do card selecionado)
+        stack.addArrangedSubview(feedbackTitle)
+        let fbStack = NSStackView(views: [feedbackBadge, feedbackBody])
+        fbStack.orientation = .vertical
+        fbStack.alignment = .leading
+        fbStack.spacing = 4
+        feedbackBody.lineBreakMode = .byWordWrapping
+        feedbackBody.maximumNumberOfLines = 0
+        feedbackBody.preferredMaxLayoutWidth = 312
+        let fbCard = Brand.cardContainer(fbStack, padding: 10)
+        fullWidth(fbCard)
+        stack.addArrangedSubview(fbCard)
+
         // Propriedades
         stack.addArrangedSubview(Brand.label("Propriedade do link (URL)", font: Brand.body(12), color: Brand.textMuted))
         fullWidth(urlPropertyPopup); stack.addArrangedSubview(urlPropertyPopup)
         stack.addArrangedSubview(Brand.label("Propriedade do arquivo", font: Brand.body(12), color: Brand.textMuted))
         fullWidth(filePropertyPopup); stack.addArrangedSubview(filePropertyPopup)
+        stack.addArrangedSubview(Brand.label("Propriedade de status", font: Brand.body(12), color: Brand.textMuted))
+        statusPropertyPopup.target = self
+        statusPropertyPopup.action = #selector(statusPropertyChanged)
+        fullWidth(statusPropertyPopup); stack.addArrangedSubview(statusPropertyPopup)
 
         statusLabel.lineBreakMode = .byWordWrapping
         statusLabel.maximumNumberOfLines = 3
@@ -179,6 +204,12 @@ final class WorkflowPanelViewController: NSViewController,
         Task { await reloadDatabaseDetails(db.id) }
     }
 
+    @objc private func statusPropertyChanged() {
+        AppConfig.statusPropertyName = selected(statusPropertyPopup, statusProperties)?.name
+        guard let db = selected(databasePopup, databases) else { return }
+        Task { await reloadPages(databaseId: db.id, query: searchField.stringValue) }
+    }
+
     // MARK: - Busca
 
     func controlTextDidChange(_ obj: Notification) {
@@ -219,16 +250,47 @@ final class WorkflowPanelViewController: NSViewController,
                 field.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
             ])
         }
-        cell.textField?.stringValue = pages[row].title
+        let page = pages[row]
+        cell.textField?.stringValue = page.status.map { "\(page.title)   ·   \($0)" } ?? page.title
         return cell
     }
 
     func tableViewSelectionDidChange(_ notification: Notification) {
         let row = cardsTable.selectedRow
         guard row >= 0, row < pages.count else { return }
-        AppConfig.preferredCardId = pages[row].id
-        AppConfig.preferredCardTitle = pages[row].title
-        setStatus("Card padrão: \(pages[row].title)")
+        let page = pages[row]
+        AppConfig.preferredCardId = page.id
+        AppConfig.preferredCardTitle = page.title
+        setStatus("Card padrão: \(page.title)")
+        showFeedback(for: page)
+    }
+
+    /// Mostra o status e os comentários (o "pedir ajustes") do card.
+    private func showFeedback(for page: NotionPage) {
+        feedbackBadge.stringValue = page.status ?? "—"
+        feedbackBody.stringValue = "Carregando feedback…"
+        guard let notion = notion else { return }
+        Task {
+            do {
+                let comments = try await notion.comments(pageId: page.id)
+                await MainActor.run {
+                    if comments.isEmpty {
+                        self.feedbackBody.stringValue = "Sem comentários do cliente neste card."
+                    } else {
+                        // Mais recentes primeiro, no máximo 5.
+                        self.feedbackBody.stringValue = comments
+                            .sorted { $0.createdTime > $1.createdTime }
+                            .prefix(5)
+                            .map { "• \($0.text)" }
+                            .joined(separator: "\n")
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.feedbackBody.stringValue = "Não foi possível ler os comentários (a integração precisa da permissão \"Read comments\")."
+                }
+            }
+        }
     }
 
     // MARK: - Carregamento
@@ -265,10 +327,17 @@ final class WorkflowPanelViewController: NSViewController,
                 self.titleProperty = title
                 self.urlProperties = props.filter { $0.type == "url" }
                 self.fileProperties = props.filter { $0.type == "files" }
+                self.statusProperties = props.filter { $0.type == "status" || $0.type == "select" }
                 self.urlPropertyPopup.removeAllItems()
                 self.urlPropertyPopup.addItems(withTitles: self.urlProperties.map { $0.name })
                 self.filePropertyPopup.removeAllItems()
                 self.filePropertyPopup.addItems(withTitles: self.fileProperties.map { $0.name })
+                self.statusPropertyPopup.removeAllItems()
+                self.statusPropertyPopup.addItems(withTitles: self.statusProperties.map { $0.name })
+                if let saved = AppConfig.statusPropertyName,
+                   let idx = self.statusProperties.firstIndex(where: { $0.name == saved }) {
+                    self.statusPropertyPopup.selectItem(at: idx)
+                }
             }
             await reloadPages(databaseId: databaseId, query: searchField.stringValue)
         } catch {
@@ -279,7 +348,8 @@ final class WorkflowPanelViewController: NSViewController,
     private func reloadPages(databaseId: String, query: String) async {
         guard let notion = notion else { return }
         do {
-            let result = try await notion.listPages(databaseId: databaseId, titleProperty: titleProperty, query: query)
+            let result = try await notion.listPages(databaseId: databaseId, titleProperty: titleProperty,
+                                                    query: query, statusProperty: AppConfig.statusPropertyName)
             await MainActor.run { self.pages = result; self.cardsTable.reloadData() }
         } catch {
             await MainActor.run { self.setStatus("Erro: \(error.localizedDescription)", error: true) }

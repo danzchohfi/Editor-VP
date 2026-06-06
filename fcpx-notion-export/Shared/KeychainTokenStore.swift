@@ -84,6 +84,12 @@ enum AppConfig {
         set { defaults.set(newValue, forKey: "default_file_property") }
     }
 
+    /// Propriedade que guarda o status de aprovação (tipo Status/Select).
+    static var statusPropertyName: String? {
+        get { defaults.string(forKey: "default_status_property") }
+        set { defaults.set(newValue, forKey: "default_status_property") }
+    }
+
     /// Card pré-selecionado no painel (usado para pré-marcar no Compartilhar).
     static var preferredCardId: String? {
         get { defaults.string(forKey: "preferred_card_id") }

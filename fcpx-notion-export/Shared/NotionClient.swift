@@ -34,6 +34,14 @@ struct NotionDatabase: Identifiable, Hashable {
 struct NotionPage: Identifiable, Hashable {
     let id: String
     let title: String
+    var status: String? = nil
+}
+
+/// Um comentário de uma página do Notion (usado para o "pedir ajustes").
+struct NotionComment: Identifiable, Hashable {
+    var id: String { createdTime + text }
+    let text: String
+    let createdTime: String
 }
 
 /// Uma propriedade do banco de dados (nome + tipo Notion, ex.: "files", "title").
@@ -126,7 +134,9 @@ final class NotionClient {
     }
 
     /// Lista registros do banco. `query` filtra pelo texto do título (client-side).
-    func listPages(databaseId: String, titleProperty: String, query: String = "") async throws -> [NotionPage] {
+    /// Se `statusProperty` for informado, traz também o status de cada registro.
+    func listPages(databaseId: String, titleProperty: String, query: String = "",
+                   statusProperty: String? = nil) async throws -> [NotionPage] {
         var body: [String: Any] = ["page_size": 100]
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
@@ -140,7 +150,24 @@ final class NotionClient {
                   let props = page["properties"] as? [String: Any],
                   let titleProp = props[titleProperty] as? [String: Any] else { return nil }
             let title = Self.plainText(from: titleProp["title"]) ?? "(sem título)"
-            return NotionPage(id: id, title: title.isEmpty ? "(sem título)" : title)
+            var status: String?
+            if let statusProperty = statusProperty, let sp = props[statusProperty] as? [String: Any] {
+                status = Self.statusName(from: sp)
+            }
+            return NotionPage(id: id, title: title.isEmpty ? "(sem título)" : title, status: status)
+        }
+    }
+
+    /// Lê os comentários de uma página (usado para mostrar o "pedir ajustes").
+    /// Requer a capability "Read comments" habilitada na integração.
+    func comments(pageId: String) async throws -> [NotionComment] {
+        let request = try makeRequest(path: "comments?block_id=\(pageId)", method: "GET")
+        let response = try await send(request)
+        let results = response["results"] as? [[String: Any]] ?? []
+        return results.compactMap { comment in
+            let text = Self.plainText(from: comment["rich_text"]) ?? ""
+            let created = comment["created_time"] as? String ?? ""
+            return text.isEmpty ? nil : NotionComment(text: text, createdTime: created)
         }
     }
 
@@ -254,6 +281,13 @@ final class NotionClient {
         guard let array = value as? [[String: Any]] else { return nil }
         let text = array.compactMap { $0["plain_text"] as? String }.joined()
         return text.isEmpty ? nil : text
+    }
+
+    /// Lê o nome do status de uma propriedade do tipo "status" ou "select".
+    private static func statusName(from dict: [String: Any]) -> String? {
+        if let s = dict["status"] as? [String: Any] { return s["name"] as? String }
+        if let s = dict["select"] as? [String: Any] { return s["name"] as? String }
+        return nil
     }
 
     /// Mapeia a extensão do arquivo para um content-type de vídeo.
